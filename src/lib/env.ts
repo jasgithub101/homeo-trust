@@ -1,26 +1,53 @@
 /**
  * Validated server-side environment variables.
+ *
  * Import this only in server-side code (Server Actions, API routes, lib/).
- * Not imported in layout/page during Phase 1 to allow builds without .env.local.
+ * Validation is LAZY: it runs the first time `env()` is called at request time,
+ * not at module import. This keeps `next build` working without a populated
+ * `.env.local`, while still failing fast at runtime if required vars are missing.
+ *
+ * Never log secret values from here.
  */
 import { z } from "zod";
 
 const envSchema = z.object({
+  // Required
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
-  AUTH_SECRET: z.string().min(32, "AUTH_SECRET must be at least 32 chars"),
-  NODE_ENV: z
-    .enum(["development", "production", "test"])
-    .default("development"),
+  // Direct (non-pooled) connection used by Prisma migrations/seeding. Optional
+  // at app runtime; in development it points at the same local database.
+  DIRECT_URL: z.string().optional(),
+  AUTH_SECRET: z
+    .string()
+    .min(32, "AUTH_SECRET must be at least 32 chars (used to HMAC session tokens)"),
+
+  // Defaulted
+  NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
+
+  // Optional SMTP (Phase 2 onboarding email). When unset, dev falls back to
+  // logging the message to the server console; production must configure SMTP.
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().optional(),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().optional(),
 });
 
-function parseEnv() {
+export type Env = z.infer<typeof envSchema>;
+
+let cached: Env | null = null;
+
+export function env(): Env {
+  if (cached) return cached;
   const result = envSchema.safeParse(process.env);
   if (!result.success) {
-    console.error("Invalid environment variables:", result.error.flatten());
+    // Log only the field names/messages, never the values.
+    console.error(
+      "Invalid environment variables:",
+      result.error.flatten().fieldErrors,
+    );
     throw new Error("Invalid environment variables — check .env.local");
   }
-  return result.data;
+  cached = result.data;
+  return cached;
 }
-
-export const env = parseEnv();

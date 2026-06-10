@@ -6,5 +6,139 @@ datasource db {
   provider = "postgresql"
 }
 
-// Clinical models will be added in Phase 4.
-// Auth/user models will be added in Phase 2.
+// =============================================================
+// Phase 2: Authentication, first admin, roles & permissions.
+// Clinical models (Patient/Case/Treatment/etc.) arrive in Phase 4.
+// Do not add doctorId ownership columns to future clinical tables.
+// =============================================================
+
+model User {
+  id                 String   @id @default(cuid())
+  name               String
+  email              String   @unique
+  username           String   @unique
+  passwordHash       String
+  phone              String?
+  active             Boolean  @default(true)
+  mustChangePassword Boolean  @default(false)
+  createdByUserId    String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Relations
+  createdBy     User?          @relation("UserCreatedBy", fields: [createdByUserId], references: [id])
+  createdUsers  User[]         @relation("UserCreatedBy")
+  doctorProfile DoctorProfile?
+  userRoles     UserRole[]     @relation("UserRoleUser")
+  assignedRoles UserRole[]     @relation("UserRoleAssignedBy")
+  sessions      Session[]
+  auditLogs     AuditLog[]     @relation("AuditActor")
+
+  @@index([email])
+  @@index([username])
+}
+
+model DoctorProfile {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  qualification      String
+  registrationNumber String?
+  specialization     String?
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Role {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  description  String?
+  isSystemRole Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  label       String
+  description String?
+  category    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rolePermissions RolePermission[]
+}
+
+model RolePermission {
+  id           String   @id @default(cuid())
+  roleId       String
+  permissionId String
+  createdAt    DateTime @default(now())
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+}
+
+model UserRole {
+  id               String   @id @default(cuid())
+  userId           String
+  roleId           String
+  assignedByUserId String?
+  createdAt        DateTime @default(now())
+
+  user       User  @relation("UserRoleUser", fields: [userId], references: [id], onDelete: Cascade)
+  role       Role  @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  assignedBy User? @relation("UserRoleAssignedBy", fields: [assignedByUserId], references: [id])
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+}
+
+// Server-side, database-backed opaque sessions.
+// The raw session token is NEVER stored — only an HMAC-SHA256 of it (tokenHash).
+// Idle expiry (sliding) and absolute expiry are both enforced server-side.
+model Session {
+  id                String   @id @default(cuid())
+  userId            String
+  tokenHash         String   @unique
+  ip                String?
+  userAgent         String?
+  createdAt         DateTime @default(now())
+  lastUsedAt        DateTime @default(now())
+  idleExpiresAt     DateTime
+  absoluteExpiresAt DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Append-only audit trail for sensitive actions.
+// actorUserId is nullable so failed logins (unknown actor) can still be recorded.
+// Never store passwords or raw session tokens in metadata.
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorUserId String?
+  action      String
+  entityType  String?
+  entityId    String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorUserId], references: [id])
+
+  @@index([actorUserId])
+  @@index([action])
+  @@index([createdAt])
+}
