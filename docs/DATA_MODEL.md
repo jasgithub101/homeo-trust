@@ -60,7 +60,14 @@ Notes:
 
 Notes:
 
-- Every clinical doctor should have a `DoctorProfile`.
+- `DoctorProfile` is **optional** and exists only for users who are actually
+  clinical doctors. Non-doctor users (nurses, assistants, reception, records
+  staff, etc.) are `User`s with roles/permissions but **no** `DoctorProfile`.
+- Only clinical doctor links reference `DoctorProfile`:
+  `DoctorPatientRelationship.doctorProfileId` and
+  `TreatmentDoctorParticipant.doctorProfileId`. A user without a `DoctorProfile`
+  can never be recorded as a treating/consulting doctor, regardless of their
+  roles.
 - Do not create special regional-head profiles.
 
 ### Role

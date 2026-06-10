@@ -30,7 +30,7 @@ export default async function UsersPage() {
           href="/admin/users/new"
           className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
         >
-          Create doctor
+          Create user
         </Link>
       </div>
 
@@ -47,8 +47,15 @@ export default async function UsersPage() {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {users.map((u) => (
-              <tr key={u.id}>
-                <td className="px-4 py-3 text-slate-900">{u.name}</td>
+              <tr key={u.id} className="hover:bg-slate-50">
+                <td className="px-4 py-3">
+                  <Link
+                    href={`/admin/users/${u.id}`}
+                    className="font-medium text-brand-700 hover:underline"
+                  >
+                    {u.name}
+                  </Link>
+                </td>
                 <td className="px-4 py-3 text-slate-600">{u.username}</td>
                 <td className="px-4 py-3 text-slate-600">{u.email}</td>
                 <td className="px-4 py-3 text-slate-600">

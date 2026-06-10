@@ -74,7 +74,22 @@ See `.env.example` for the full list of environment variables.
 
 ## 3. Core System Concept
 
-Everyone using the clinical side of the system is a **doctor**.
+The system supports **multiple kinds of users/staff** — clinical doctors,
+nurses, assistants, reception/front-desk, case reviewers, records staff, etc. A
+**User** is anyone who can log in. What a user can do is controlled entirely by
+**configurable roles and permissions**, not by their job title.
+
+- **User** — anyone who can log in.
+- **Role** — a configurable access package assigned to users.
+- **Permission** — a specific allowed action.
+- **DoctorProfile** — an **optional** profile created only for users who are
+  actually clinical doctors. Non-doctor users do not have one.
+
+"Doctor", "nurse", "assistant", etc. are **not** hardcoded authorization roles
+and there are no fixed role enums. A nurse or assistant gains access through
+assigned roles/permissions, but is **not** a treating/consulting doctor unless a
+`DoctorProfile` exists. Clinical doctor links (`DoctorPatientRelationship`,
+`TreatmentDoctorParticipant`) reference `DoctorProfile` only.
 
 There is only one initial fixed system role: **`ADMIN`**. Admin has super access.
 One admin can create another admin.

@@ -3,9 +3,10 @@ import type { AppShellUser } from "./AppShell";
 
 const CLINICAL_ITEMS = [{ label: "Dashboard", href: "/dashboard", icon: "⊞" }];
 
-// Phase 2 only ships the admin user-creation surface. More admin nav arrives
-// with role management in Phase 3.
-const ADMIN_ITEMS = [{ label: "Users", href: "/admin/users", icon: "◈" }];
+const ADMIN_ITEMS = [
+  { label: "Users", href: "/admin/users", icon: "◈" },
+  { label: "Roles", href: "/admin/roles", icon: "◉" },
+];
 
 export function Sidebar({ user }: { user: AppShellUser }) {
   return (

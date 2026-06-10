@@ -16,6 +16,13 @@ export const AUDIT_ACTIONS = {
   LOGOUT: "logout",
   PASSWORD_CHANGED: "password_changed",
   USER_CREATED: "user_created",
+  // Phase 3 — roles & permissions
+  ROLE_CREATED: "role_created",
+  ROLE_UPDATED: "role_updated",
+  ROLE_DELETED: "role_deleted",
+  ROLE_DELETE_BLOCKED: "role_delete_blocked",
+  ROLE_PERMISSIONS_CHANGED: "role_permissions_changed",
+  USER_ROLES_CHANGED: "user_roles_changed",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

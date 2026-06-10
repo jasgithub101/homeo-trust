@@ -7,12 +7,12 @@ import { generateTempPassword } from "@/lib/auth/temp-password";
 import { sendMail } from "@/lib/mail/mailer";
 import { writeAuditLog, AUDIT_ACTIONS } from "@/lib/audit/log";
 import { env } from "@/lib/env";
-import { createDoctorSchema } from "@/lib/validation/auth";
+import { createUserSchema } from "@/lib/validation/auth";
 
-export interface CreateDoctorState {
+export interface CreateUserState {
   error?: string;
   fieldErrors?: Record<string, string[]>;
-  success?: { name: string; username: string; email: string };
+  success?: { name: string; username: string; email: string; isDoctor: boolean };
 }
 
 function emptyToNull(v: string | undefined): string | null {
@@ -20,26 +20,37 @@ function emptyToNull(v: string | undefined): string | null {
   return t.length ? t : null;
 }
 
-export async function createDoctorAction(
-  _prevState: CreateDoctorState,
+export async function createUserAction(
+  _prevState: CreateUserState,
   formData: FormData,
-): Promise<CreateDoctorState> {
+): Promise<CreateUserState> {
   const admin = await requireAdminAccess();
 
-  const parsed = createDoctorSchema.safeParse({
+  const parsed = createUserSchema.safeParse({
     name: formData.get("name"),
     email: formData.get("email"),
     username: formData.get("username"),
     phone: formData.get("phone") ?? "",
-    qualification: formData.get("qualification"),
+    isDoctor: formData.get("isDoctor") === "on",
+    qualification: formData.get("qualification") ?? "",
     registrationNumber: formData.get("registrationNumber") ?? "",
     specialization: formData.get("specialization") ?? "",
+    roleIds: formData.getAll("roleIds"),
   });
   if (!parsed.success) {
     return { fieldErrors: parsed.error.flatten().fieldErrors };
   }
   const input = parsed.data;
   const email = input.email.toLowerCase();
+  const roleIds = Array.from(new Set(input.roleIds));
+
+  // Optional roles must reference existing DB roles (never a hardcoded role).
+  if (roleIds.length > 0) {
+    const found = await db.role.count({ where: { id: { in: roleIds } } });
+    if (found !== roleIds.length) {
+      return { error: "One or more selected roles no longer exist." };
+    }
+  }
 
   // Pre-check uniqueness for friendly field errors.
   const existing = await db.user.findFirst({
@@ -70,19 +81,30 @@ export async function createDoctorAction(
         active: true,
         mustChangePassword: true,
         createdByUserId: admin.id,
-        doctorProfile: {
-          create: {
-            qualification: input.qualification,
-            registrationNumber: emptyToNull(input.registrationNumber),
-            specialization: emptyToNull(input.specialization),
-          },
-        },
+        // DoctorProfile only for users who are actually doctors.
+        doctorProfile: input.isDoctor
+          ? {
+              create: {
+                qualification: input.qualification!.trim(),
+                registrationNumber: emptyToNull(input.registrationNumber),
+                specialization: emptyToNull(input.specialization),
+              },
+            }
+          : undefined,
+        userRoles: roleIds.length
+          ? {
+              create: roleIds.map((roleId) => ({
+                roleId,
+                assignedByUserId: admin.id,
+              })),
+            }
+          : undefined,
       },
       select: { id: true },
     });
   } catch {
     // Unique race or other constraint failure.
-    return { error: "Could not create the doctor. Please try again." };
+    return { error: "Could not create the user. Please try again." };
   }
 
   await writeAuditLog({
@@ -90,8 +112,18 @@ export async function createDoctorAction(
     actorUserId: admin.id,
     entityType: "User",
     entityId: created.id,
-    metadata: { username: input.username, createdAsDoctor: true },
+    metadata: { username: input.username, isDoctor: input.isDoctor },
   });
+
+  if (roleIds.length > 0) {
+    await writeAuditLog({
+      action: AUDIT_ACTIONS.USER_ROLES_CHANGED,
+      actorUserId: admin.id,
+      entityType: "User",
+      entityId: created.id,
+      metadata: { added: roleIds, removed: [] },
+    });
+  }
 
   // Send credentials. In dev (no SMTP) this prints to the server console,
   // clearly marked development-only; in production it is emailed.
@@ -113,6 +145,11 @@ export async function createDoctorAction(
   });
 
   return {
-    success: { name: input.name, username: input.username, email },
+    success: {
+      name: input.name,
+      username: input.username,
+      email,
+      isDoctor: input.isDoctor,
+    },
   };
 }

@@ -55,17 +55,31 @@ export type ForcedPasswordChangeInput = z.infer<
   typeof forcedPasswordChangeSchema
 >;
 
-export const createDoctorSchema = z.object({
-  name: z.string().min(1, "Name is required").max(120),
-  email: z.string().email("Enter a valid email").max(254),
-  username: z
-    .string()
-    .min(3, "Username must be at least 3 characters")
-    .max(40)
-    .regex(/^[a-zA-Z0-9._-]+$/, "Use letters, numbers, dot, dash or underscore"),
-  phone: z.string().max(40).optional().or(z.literal("")),
-  qualification: z.string().min(1, "Qualification is required").max(120),
-  registrationNumber: z.string().max(80).optional().or(z.literal("")),
-  specialization: z.string().max(120).optional().or(z.literal("")),
-});
-export type CreateDoctorInput = z.infer<typeof createDoctorSchema>;
+// Create any user (doctor, nurse, assistant, reception, etc.). A DoctorProfile
+// is OPTIONAL and only created when `isDoctor` is set — "doctor" is a clinical
+// profile, not an authorization role. Access is granted separately via roles.
+export const createUserSchema = z
+  .object({
+    name: z.string().min(1, "Name is required").max(120),
+    email: z.string().email("Enter a valid email").max(254),
+    username: z
+      .string()
+      .min(3, "Username must be at least 3 characters")
+      .max(40)
+      .regex(/^[a-zA-Z0-9._-]+$/, "Use letters, numbers, dot, dash or underscore"),
+    phone: z.string().max(40).optional().or(z.literal("")),
+    // Doctor profile is optional; fields only required when isDoctor is true.
+    isDoctor: z.boolean().default(false),
+    qualification: z.string().max(120).optional().or(z.literal("")),
+    registrationNumber: z.string().max(80).optional().or(z.literal("")),
+    specialization: z.string().max(120).optional().or(z.literal("")),
+    // Optional roles to assign at creation. Existing DB role ids only; may be
+    // empty (a user can be created with no roles). Validated to exist in the
+    // action before assignment.
+    roleIds: z.array(z.string().min(1)).optional().default([]),
+  })
+  .refine(
+    (d) => !d.isDoctor || (typeof d.qualification === "string" && d.qualification.trim().length > 0),
+    { message: "Qualification is required when adding a doctor profile", path: ["qualification"] },
+  );
+export type CreateUserInput = z.infer<typeof createUserSchema>;

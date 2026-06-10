@@ -80,6 +80,18 @@ Goals:
 - Admin UI to assign roles to users
 - Server-side permission checks
 
+Implemented in Phase 3: admin UI to view/create/update roles, a category-grouped
+permission matrix per role, role assignment on the user detail page, and a
+**Create User** flow (any staff type — doctor, nurse, assistant, reception,
+etc.) with optional role assignment and an **optional doctor-profile section**
+(a `DoctorProfile` is created only when "this user is a doctor" is enabled).
+Protections: only `ADMIN` is a fixed system
+role (no hardcoded clinical roles); the ADMIN role cannot be renamed, edited,
+deleted, or stripped of permissions; the "ADMIN" name is reserved; role deletion
+is blocked while users are assigned; and a last-admin guard prevents removing the
+ADMIN role from the only active admin. No database migration was needed (the
+tables and permission catalog already existed from Phase 2).
+
 ---
 
 ## Phase 4: Core Clinical Database Schema

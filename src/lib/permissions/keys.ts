@@ -84,3 +84,32 @@ export type PermissionKey = (typeof PERMISSIONS)[number]["key"];
 
 /** Name of the single fixed system role. */
 export const ADMIN_ROLE_NAME = "ADMIN";
+
+/** Set of all valid permission keys, for fast membership/validation checks. */
+export const PERMISSION_KEY_SET: ReadonlySet<string> = new Set(
+  PERMISSIONS.map((p) => p.key),
+);
+
+/** Type guard: is the given string a known permission key? */
+export function isPermissionKey(key: string): key is PermissionKey {
+  return PERMISSION_KEY_SET.has(key);
+}
+
+/** Permissions grouped by category, preserving catalog order, for UI rendering. */
+export function groupPermissionsByCategory(): {
+  category: string;
+  permissions: PermissionDefinition[];
+}[] {
+  const groups: { category: string; permissions: PermissionDefinition[] }[] = [];
+  const index = new Map<string, PermissionDefinition[]>();
+  for (const p of PERMISSIONS) {
+    let bucket = index.get(p.category);
+    if (!bucket) {
+      bucket = [];
+      index.set(p.category, bucket);
+      groups.push({ category: p.category, permissions: bucket });
+    }
+    bucket.push(p);
+  }
+  return groups;
+}

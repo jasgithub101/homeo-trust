@@ -207,6 +207,13 @@ Add audit logging for sensitive actions. The `AuditLog` entity is defined in
 - Explore searched
 - AI search used
 
+Concrete audit action identifiers implemented so far (in `AUDIT_ACTIONS`,
+`src/lib/audit/log.ts`): `login`, `failed_login`, `logout`, `password_changed`,
+`user_created` (Phase 2); `role_created`, `role_updated`, `role_deleted`,
+`role_delete_blocked`, `role_permissions_changed`, `user_roles_changed`
+(Phase 3). Remaining clinical/Explore/AI/attachment actions are added in later
+phases.
+
 ## 7. Security Requirements
 
 Security is mandatory, not optional.
