@@ -8,3 +8,7 @@ out
 dist
 coverage
 .vercel
+
+# typescript / next
+*.tsbuildinfo
+next-env.d.ts
