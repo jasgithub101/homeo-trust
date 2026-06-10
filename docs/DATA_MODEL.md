@@ -157,9 +157,11 @@ Rules:
 
 - A patient can have multiple doctors over time.
 - A patient can have one current primary treating doctor at a time unless
-  explicitly allowed later. Enforce this with a database constraint where
-  possible (e.g. a partial unique index on the current primary relationship),
-  plus app-level validation.
+  explicitly allowed later. Enforced by a Postgres **partial unique index**
+  `dpr_one_current_primary_per_patient` on `(patientId)` WHERE
+  `relationshipType = 'PRIMARY_TREATING' AND isCurrentlyTreating = true`. This is
+  a manual migration artifact (Prisma cannot express partial/WHERE indexes);
+  app-level validation is added with the Phase 5 assignment workflow.
 - Past doctors should remain in history.
 - Treatment history must not break when a doctor changes.
 - Access to full sensitive patient data is based on permissions **plus**
@@ -179,7 +181,8 @@ Rules:
 - `name`
 - `dateOfBirth` nullable — store when available.
 - `age` — store only when `dateOfBirth` is unavailable or approximate.
-- `gender`
+- `gender` — native `Gender` enum: `MALE`, `FEMALE`, `OTHER`, `UNSPECIFIED`
+  (default `UNSPECIFIED`).
 - `phone` optional
 - `email` optional
 - `address` optional
@@ -387,8 +390,13 @@ Attachment privacy (enforcement details in `SECURITY_MODEL.md` /
 
 ## 10. Explore Case Index (de-identified)
 
-Create a de-identified view/table such as `ExploreCaseIndex`. Explore/AI read
-from this dataset, never from raw `Patient` tables. Full privacy rules are in
+Implemented as a **physical de-identified table** (not a SQL view) so that
+de-identified data is physically separated from raw `Patient` PII and can carry
+filter indexes. Explore/AI read from this dataset, never from raw `Patient`
+tables. `patientId` is a unique FK (cascades on patient delete); `caseRecordId`
+is a denormalized internal reference (no FK). Both `patientId`/`caseRecordId`
+are internal-only and must never be selected to the client. `gender` mirrors the
+`Gender` enum. Populated/refreshed in Phase 8. Full privacy rules are in
 `AI_PRIVACY_MODEL.md`.
 
 ### ExploreCaseIndex

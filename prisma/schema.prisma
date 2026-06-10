@@ -8,8 +8,19 @@ datasource db {
 
 // =============================================================
 // Phase 2: Authentication, first admin, roles & permissions.
-// Clinical models (Patient/Case/Treatment/etc.) arrive in Phase 4.
-// Do not add doctorId ownership columns to future clinical tables.
+// Phase 4: Core clinical schema (Patient/Case/Issue/Symptom/Treatment/etc.).
+//
+// Modeling rules (enforced below):
+// - No doctorId ownership column on Patient/CaseRecord/PatientIssue/
+//   PatientSymptom/TreatmentEntry. Doctor involvement lives only in
+//   DoctorPatientRelationship and TreatmentDoctorParticipant, which link to
+//   DoctorProfile (not generic User) — so non-doctor users can never appear as
+//   treating/consulting doctors.
+// - Exactly one CaseRecord per Patient (unique patientId).
+// - One current PRIMARY_TREATING doctor per Patient is enforced by a Postgres
+//   PARTIAL UNIQUE INDEX added via raw SQL in the clinical migration
+//   (dpr_one_current_primary_per_patient). Prisma cannot express partial/WHERE
+//   indexes, so it is a manually-maintained migration artifact.
 // =============================================================
 
 model User {
@@ -34,6 +45,11 @@ model User {
   sessions      Session[]
   auditLogs     AuditLog[]     @relation("AuditActor")
 
+  // Phase 4 — "who performed the action" references (not clinical doctorhood).
+  dprAssigned         DoctorPatientRelationship[] @relation("DprAssignedBy")
+  uploadedAttachments PatientAttachment[]         @relation("AttachmentUploadedBy")
+  aiSearchLogs        AISearchLog[]               @relation("AiSearchRequestedBy")
+
   @@index([email])
   @@index([username])
 }
@@ -49,6 +65,10 @@ model DoctorProfile {
   updatedAt          DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Phase 4 — clinical doctor involvement links to DoctorProfile (not User).
+  doctorRelationships     DoctorPatientRelationship[]
+  treatmentParticipations TreatmentDoctorParticipant[]
 }
 
 model Role {
@@ -140,5 +160,302 @@ model AuditLog {
 
   @@index([actorUserId])
   @@index([action])
+  @@index([createdAt])
+}
+
+// =============================================================
+// Phase 4: Core clinical schema
+// =============================================================
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  UNSPECIFIED
+}
+
+enum RelationshipType {
+  PRIMARY_TREATING
+  CONSULTING
+  ASSISTING
+  TRANSFERRED_FROM
+  TRANSFERRED_TO
+}
+
+enum IssueStatus {
+  ACTIVE
+  RESOLVED
+  CHRONIC
+  RECURRING
+}
+
+enum TreatmentEntryType {
+  PRESCRIPTION
+  FOLLOW_UP
+  PRESCRIPTION_AND_FOLLOW_UP
+  NOTE
+}
+
+enum PatientCondition {
+  IMPROVED
+  SAME
+  WORSENED
+}
+
+enum ParticipantType {
+  TREATING_DOCTOR
+  CONSULTING_DOCTOR
+}
+
+enum AttachmentType {
+  ISSUE_PHOTO
+  LAB_REPORT
+  SCAN_REPORT
+  PRESCRIPTION_IMAGE
+  OTHER
+}
+
+// Patient PII. Access is gated at the query/permission layer (Phase 5+).
+// PII columns (name/phone/email/address/emergency contact/exact ids) must never
+// be surfaced in Explore/AI — those read the de-identified ExploreCaseIndex.
+model Patient {
+  id          String    @id @default(cuid())
+  patientCode String    @unique
+  name        String
+  dateOfBirth DateTime?
+  age         Int?
+  gender      Gender    @default(UNSPECIFIED)
+  phone       String?
+  email       String?
+  address     String?
+  city        String?
+  state       String?
+  country     String?
+  occupation  String?
+
+  emergencyContactName     String?
+  emergencyContactRelation String?
+  emergencyContactPhone    String?
+  emergencyContactAddress  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  caseRecord          CaseRecord?
+  issues              PatientIssue[]
+  doctorRelationships DoctorPatientRelationship[]
+  treatmentEntries    TreatmentEntry[]
+  attachments         PatientAttachment[]
+  exploreIndex        ExploreCaseIndex?
+
+  @@index([createdAt])
+}
+
+// Exactly one CaseRecord per Patient (unique patientId). No doctorId here —
+// access is via Patient permissions + DoctorPatientRelationship.
+model CaseRecord {
+  id               String   @id @default(cuid())
+  patientId        String   @unique
+  chiefComplaint   String
+  caseDescription  String
+  medicalHistory   String?
+  familyHistory    String?
+  physicalGenerals String?
+  mentalGenerals   String?
+  modalities       String?
+  diagnosisNotes   String?
+  repertoryNotes   String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  patient          Patient             @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  treatmentEntries TreatmentEntry[]
+  attachments      PatientAttachment[]
+}
+
+model PatientIssue {
+  id          String      @id @default(cuid())
+  patientId   String
+  title       String
+  description String
+  onsetDate   DateTime?
+  status      IssueStatus @default(ACTIVE)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  patient          Patient             @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  symptoms         PatientSymptom[]
+  treatmentEntries TreatmentEntry[]
+  attachments      PatientAttachment[]
+
+  @@index([patientId])
+  @@index([status])
+}
+
+model PatientSymptom {
+  id             String   @id @default(cuid())
+  patientIssueId String
+  symptomName    String
+  description    String?
+  severity       Int? // e.g. 1-10
+  duration       String?
+  modalities     String?
+  triggers       String?
+  location       String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  patientIssue PatientIssue @relation(fields: [patientIssueId], references: [id], onDelete: Cascade)
+
+  @@index([patientIssueId])
+}
+
+// Historical, time-based doctor-patient assignment. Links to DoctorProfile.
+// A partial unique index (raw SQL in the migration) enforces one current
+// PRIMARY_TREATING doctor per patient: dpr_one_current_primary_per_patient.
+model DoctorPatientRelationship {
+  id                  String           @id @default(cuid())
+  patientId           String
+  doctorProfileId     String
+  relationshipType    RelationshipType
+  startDate           DateTime         @default(now())
+  endDate             DateTime?
+  isCurrentlyTreating Boolean          @default(true)
+  notes               String?
+  assignedByUserId    String?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  patient       Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctorProfile DoctorProfile @relation(fields: [doctorProfileId], references: [id], onDelete: Restrict)
+  assignedBy    User?         @relation("DprAssignedBy", fields: [assignedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([patientId])
+  @@index([doctorProfileId])
+}
+
+// Prescription + follow-up combined. No direct doctorId — treating/consulting
+// doctors are recorded via TreatmentDoctorParticipant.
+model TreatmentEntry {
+  id               String             @id @default(cuid())
+  patientId        String
+  caseRecordId     String
+  patientIssueId   String?
+  treatmentDate    DateTime           @default(now())
+  entryType        TreatmentEntryType
+  medicineName     String?
+  potency          String?
+  dosage           String?
+  frequency        String?
+  duration         String?
+  instructions     String?
+  followUpNotes    String?
+  symptomChanges   String?
+  patientCondition PatientCondition?
+  improvementScore Int? // e.g. 1-10
+  nextFollowUpDate DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  patient      Patient                      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  caseRecord   CaseRecord                   @relation(fields: [caseRecordId], references: [id], onDelete: Cascade)
+  patientIssue PatientIssue?                @relation(fields: [patientIssueId], references: [id], onDelete: SetNull)
+  participants TreatmentDoctorParticipant[]
+  attachments  PatientAttachment[]
+
+  @@index([patientId])
+  @@index([caseRecordId])
+  @@index([patientIssueId])
+  @@index([treatmentDate])
+}
+
+model TreatmentDoctorParticipant {
+  id               String          @id @default(cuid())
+  treatmentEntryId String
+  doctorProfileId  String
+  participantType  ParticipantType
+  createdAt        DateTime        @default(now())
+
+  treatmentEntry TreatmentEntry @relation(fields: [treatmentEntryId], references: [id], onDelete: Cascade)
+  doctorProfile  DoctorProfile  @relation(fields: [doctorProfileId], references: [id], onDelete: Restrict)
+
+  @@unique([treatmentEntryId, doctorProfileId, participantType])
+  @@index([doctorProfileId])
+}
+
+// Private by default. Store storagePath (private bucket key), never a public
+// URL; raw attachments are never exposed in Explore/AI.
+model PatientAttachment {
+  id               String         @id @default(cuid())
+  patientId        String
+  patientIssueId   String?
+  caseRecordId     String?
+  treatmentEntryId String?
+  uploadedByUserId String?
+  fileType         AttachmentType
+  fileName         String
+  storagePath      String
+  mimeType         String
+  sizeBytes        Int
+  description      String?
+  isSensitive      Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  patient        Patient         @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patientIssue   PatientIssue?   @relation(fields: [patientIssueId], references: [id], onDelete: SetNull)
+  caseRecord     CaseRecord?     @relation(fields: [caseRecordId], references: [id], onDelete: SetNull)
+  treatmentEntry TreatmentEntry? @relation(fields: [treatmentEntryId], references: [id], onDelete: SetNull)
+  uploadedBy     User?           @relation("AttachmentUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([patientId])
+  @@index([patientIssueId])
+  @@index([caseRecordId])
+  @@index([treatmentEntryId])
+}
+
+// De-identified, physically-separate index for Explore/AI. Explore/AI read ONLY
+// from here, never from raw Patient. patientId/caseRecordId are INTERNAL ONLY
+// and must never be selected to the client. Populated/refreshed in Phase 8.
+model ExploreCaseIndex {
+  id                      String   @id @default(cuid())
+  patientId               String   @unique // internal only — never expose
+  caseRecordId            String? // internal only — denormalized reference (no FK)
+  anonymousCaseCode       String   @unique
+  ageRange                String?
+  gender                  Gender?
+  city                    String?
+  state                   String?
+  country                 String?
+  issueSummaries          String[]
+  symptomSummaries        String[]
+  medicineSummaries       String[]
+  patientConditionSummary String?
+  improvementTrend        String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([gender])
+  @@index([ageRange])
+  @@index([city])
+  @@index([state])
+  @@index([country])
+  @@index([patientConditionSummary])
+}
+
+// Only de-identified query text + responses are stored (no raw PII).
+model AISearchLog {
+  id                    String   @id @default(cuid())
+  requestingUserId      String?
+  deidentifiedQueryText String
+  deidentifiedResponse  String
+  metadata              Json?
+  createdAt             DateTime @default(now())
+
+  requestingUser User? @relation("AiSearchRequestedBy", fields: [requestingUserId], references: [id], onDelete: SetNull)
+
+  @@index([requestingUserId])
   @@index([createdAt])
 }

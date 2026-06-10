@@ -112,6 +112,20 @@ Goals:
 - ExploreCaseIndex or de-identified case view
 - Migrations and seed data
 
+Implemented in Phase 4 (schema only — no clinical UI/workflow): the 10 clinical
+models (`Patient`, `CaseRecord`, `PatientIssue`, `PatientSymptom`,
+`DoctorPatientRelationship`, `TreatmentEntry`, `TreatmentDoctorParticipant`,
+`PatientAttachment`, `ExploreCaseIndex`, `AISearchLog`) plus 7 native enums
+(`Gender`, `RelationshipType`, `IssueStatus`, `TreatmentEntryType`,
+`PatientCondition`, `ParticipantType`, `AttachmentType`), in migration
+`20260610010000_clinical_schema`. Constraints: one `CaseRecord` per patient
+(unique `patientId`); partial unique index
+`dpr_one_current_primary_per_patient`; clinical doctor links reference
+`DoctorProfile` (not `User`); no `doctorId` ownership columns;
+`ExploreCaseIndex` is a physical de-identified table; attachments store
+`storagePath` and are `isSensitive` by default. **No clinical seed data**
+(no fake PII); the permissions/admin seed is unchanged.
+
 ---
 
 ## Phase 5: Patient Management and Doctor-Patient Relationships
