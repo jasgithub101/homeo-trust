@@ -40,17 +40,37 @@ at a time.**
 - Frontend: Next.js with TypeScript
 - Styling: Tailwind CSS
 - Backend: Next.js Server Actions and/or API routes
-- Database: PostgreSQL, preferably Supabase-compatible
+- Database: **PostgreSQL**. Local PostgreSQL is the development database; any
+  PostgreSQL host may be used in production. The app is cloud-agnostic and does
+  not depend on a specific provider.
 - ORM/query layer: **Prisma** (chosen). Prisma was selected because this app
   has a relationship-heavy schema, benefits from typed migrations, and gains
   from schema-first clarity.
 - Validation: Zod or equivalent
 - Authentication: secure email/password login
-- File storage: private storage for reports/photos, preferably Supabase Storage
-  or equivalent
+- File storage: private storage for reports/photos (e.g. S3-compatible object
+  storage). Supabase Storage is one optional hosted choice, not a requirement.
 - AI: privacy-safe LLM-based case similarity/search assistant
-- Optional vector search: pgvector, Supabase Vector, or another suitable approach
+- Optional vector search: pgvector (PostgreSQL extension) or another suitable
+  approach. Supabase Vector is one optional hosted choice, not a requirement.
 - Package manager: pnpm
+
+### Database & environment (development)
+
+- The development database is **local PostgreSQL** (e.g. running in WSL). No
+  hosted provider is required to develop or run any phase.
+- `DATABASE_URL` is the connection the app uses at runtime; `DIRECT_URL` is the
+  direct (non-pooled) connection used by Prisma migrations and seeding. In
+  development both point at the same local database. In production with a
+  connection pooler they may differ.
+- Example local development values:
+
+  ```
+  DATABASE_URL="postgresql://homeo_user:homeo_dev_password@localhost:5432/homeo_trust_dev"
+  DIRECT_URL="postgresql://homeo_user:homeo_dev_password@localhost:5432/homeo_trust_dev"
+  ```
+
+See `.env.example` for the full list of environment variables.
 
 ## 3. Core System Concept
 

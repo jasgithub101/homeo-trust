@@ -4,6 +4,10 @@
 > model: every entity, every field, and the relationship/ownership rules.
 > Access-control enforcement is in `SECURITY_MODEL.md`; Explore/AI de-identified
 > data rules are in `AI_PRIVACY_MODEL.md`.
+>
+> Database: **PostgreSQL** via Prisma. Local PostgreSQL is the development
+> database; any PostgreSQL host works in production. The schema is
+> provider-agnostic and uses no Supabase-specific features.
 
 ## 0. Core Data-Modeling Rules (must hold across the whole schema)
 
@@ -92,6 +96,32 @@ Notes:
 - `roleId`
 - `assignedByUserId`
 - `createdAt`
+
+### Session
+
+Added in Phase 2 to back custom, server-side, database-backed opaque sessions
+(not in the original MASTER_SPEC; documented here per the security model).
+
+- `id`
+- `userId`
+- `tokenHash` — HMAC-SHA256 of the opaque session token, keyed with
+  `AUTH_SECRET`. **The raw token is never stored**; it lives only in the user's
+  httpOnly cookie.
+- `ip` optional
+- `userAgent` optional
+- `createdAt`
+- `lastUsedAt`
+- `idleExpiresAt` — sliding idle expiry; refreshed on use, capped at
+  `absoluteExpiresAt`.
+- `absoluteExpiresAt` — hard cap from session creation.
+
+Rules:
+
+- Validation rejects sessions that are past idle or absolute expiry, and
+  sessions belonging to inactive users.
+- Sessions are deleted on logout, on password change (all sessions rotated), and
+  when a user is deactivated.
+- Cookie is httpOnly + SameSite=Lax, and Secure in production.
 
 ---
 

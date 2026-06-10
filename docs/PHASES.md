@@ -59,6 +59,11 @@ Goals:
 - Admin can create doctor user
 - Admin can send invite/temporary credentials by email
 
+Database requirement: Phase 2 needs only a running **PostgreSQL** database
+(local PostgreSQL for development, or any PostgreSQL host). No Supabase or other
+specific provider is required. Migrations and seeding use `DIRECT_URL`; the app
+runtime uses `DATABASE_URL` (see `.env.example`).
+
 ---
 
 ## Phase 3: Dynamic Permissions and Roles

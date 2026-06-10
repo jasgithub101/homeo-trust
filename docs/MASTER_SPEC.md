@@ -38,15 +38,19 @@ Do not build the full app at once. Work one phase at a time.
 * Frontend: Next.js with TypeScript
 * Styling: Tailwind CSS
 * Backend: Next.js Server Actions and/or API routes
-* Database: PostgreSQL, preferably Supabase-compatible
+* Database: **PostgreSQL**. Local PostgreSQL is the development database; any
+  PostgreSQL host may be used in production. The app is cloud-agnostic and does
+  not depend on a specific provider.
 * ORM/query layer: **Prisma** (chosen). Prisma was selected because this app
   has a relationship-heavy schema, benefits from typed migrations, and gains
   from schema-first clarity.
 * Validation: Zod or equivalent
 * Authentication: secure email/password login
-* File storage: private storage for reports/photos, preferably Supabase Storage or equivalent
+* File storage: private storage for reports/photos (e.g. S3-compatible object
+  storage). Supabase Storage is one optional hosted choice, not a requirement.
 * AI: privacy-safe LLM-based case similarity/search assistant
-* Optional vector search: pgvector, Supabase Vector, or another suitable approach
+* Optional vector search: pgvector (PostgreSQL extension) or another suitable
+  approach. Supabase Vector is one optional hosted choice, not a requirement.
 * Package manager: pnpm
 
 ---
