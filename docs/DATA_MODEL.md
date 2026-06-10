@@ -120,7 +120,9 @@ Rules:
 
 - A patient can have multiple doctors over time.
 - A patient can have one current primary treating doctor at a time unless
-  explicitly allowed later.
+  explicitly allowed later. Enforce this with a database constraint where
+  possible (e.g. a partial unique index on the current primary relationship),
+  plus app-level validation.
 - Past doctors should remain in history.
 - Treatment history must not break when a doctor changes.
 - Access to full sensitive patient data is based on permissions **plus**
@@ -138,8 +140,8 @@ Rules:
 - `id`
 - `patientCode` or generated display identifier
 - `name`
-- `dateOfBirth` nullable
-- `age`
+- `dateOfBirth` nullable — store when available.
+- `age` — store only when `dateOfBirth` is unavailable or approximate.
 - `gender`
 - `phone` optional
 - `email` optional
@@ -164,6 +166,8 @@ AI outputs:
 - Exact address
 - Emergency contact details
 - Exact identifiers
+
+Age handling: Explore must expose `ageRange`, never the exact `dateOfBirth`.
 
 ---
 
@@ -323,7 +327,8 @@ images, and other attachments.
   - `PRESCRIPTION_IMAGE`
   - `OTHER`
 - `fileName`
-- `fileUrl` or `storagePath`
+- `storagePath` (preferred) or `fileUrl` — prefer `storagePath` over a public
+  `fileUrl` because files are private and served through signed URLs.
 - `mimeType`
 - `sizeBytes`
 - `description` optional

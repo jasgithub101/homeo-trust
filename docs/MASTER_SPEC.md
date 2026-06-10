@@ -39,9 +39,9 @@ Do not build the full app at once. Work one phase at a time.
 * Styling: Tailwind CSS
 * Backend: Next.js Server Actions and/or API routes
 * Database: PostgreSQL, preferably Supabase-compatible
-* ORM/query layer: Prisma or Drizzle
-
-  * Choose what fits best and explain the decision before implementing
+* ORM/query layer: **Prisma** (chosen). Prisma was selected because this app
+  has a relationship-heavy schema, benefits from typed migrations, and gains
+  from schema-first clarity.
 * Validation: Zod or equivalent
 * Authentication: secure email/password login
 * File storage: private storage for reports/photos, preferably Supabase Storage or equivalent
@@ -309,6 +309,8 @@ Initial permission keys may include:
 
 * `explore.view`
 * `explore.filter`
+* `explore.viewDoctorName` — future explicit permission allowing doctor names to
+  be shown in Explore. Doctor names stay hidden unless a user holds this.
 
 ### AI
 
@@ -369,7 +371,7 @@ Fields:
 Rules:
 
 * A patient can have multiple doctors over time.
-* A patient can have one current primary treating doctor at a time unless explicitly allowed later.
+* A patient can have one current primary treating doctor at a time unless explicitly allowed later. Enforce this with a database constraint where possible (e.g. a partial unique index on the current primary relationship), plus app-level validation.
 * Past doctors should remain in history.
 * Treatment history must not break when a doctor changes.
 * Access to full sensitive patient data should be based on permissions plus `DoctorPatientRelationship` rules.
@@ -387,8 +389,8 @@ Fields:
 * `id`
 * `patientCode` or generated display identifier
 * `name`
-* `dateOfBirth` nullable
-* `age`
+* `dateOfBirth` nullable — store when available.
+* `age` — store only when `dateOfBirth` is unavailable or approximate.
 * `gender`
 * `phone` optional
 * `email` optional
@@ -416,6 +418,8 @@ The following are sensitive personally identifiable information:
 * Exact identifiers
 
 These must not appear in Explore or AI outputs.
+
+Age handling: Explore must expose `ageRange`, never the exact `dateOfBirth`.
 
 ---
 
@@ -612,7 +616,8 @@ Fields:
     * `PRESCRIPTION_IMAGE`
     * `OTHER`
 * `fileName`
-* `fileUrl` or `storagePath`
+* `storagePath` (preferred) or `fileUrl` — prefer `storagePath` over a public
+  `fileUrl` because files are private and served through signed URLs.
 * `mimeType`
 * `sizeBytes`
 * `description` optional
@@ -692,7 +697,8 @@ Explore must not show:
 * Exact address
 * Emergency contact details
 * Exact patient ID
-* Doctor name unless explicitly permitted
+* Doctor name unless explicitly permitted via the `explore.viewDoctorName`
+  permission
 * Raw reports or photos
 
 Explore may show:

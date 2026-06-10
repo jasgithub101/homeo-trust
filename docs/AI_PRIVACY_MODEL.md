@@ -53,7 +53,9 @@ Explore must **not** show:
 - Exact address
 - Emergency contact details
 - Exact patient ID
-- Doctor name unless explicitly permitted
+- Exact date of birth (expose `ageRange` instead)
+- Doctor name unless explicitly permitted via the `explore.viewDoctorName`
+  permission
 - Raw reports or photos
 
 Explore **may** show:

@@ -125,6 +125,8 @@ Initial permission keys may include the following (grouped by category):
 
 - `explore.view`
 - `explore.filter`
+- `explore.viewDoctorName` — future explicit permission allowing doctor names to
+  be shown in Explore. Doctor names stay hidden unless a user holds this.
 
 ### AI
 

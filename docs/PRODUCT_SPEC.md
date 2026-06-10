@@ -41,8 +41,9 @@ at a time.**
 - Styling: Tailwind CSS
 - Backend: Next.js Server Actions and/or API routes
 - Database: PostgreSQL, preferably Supabase-compatible
-- ORM/query layer: Prisma or Drizzle — choose what fits best and explain the
-  decision before implementing
+- ORM/query layer: **Prisma** (chosen). Prisma was selected because this app
+  has a relationship-heavy schema, benefits from typed migrations, and gains
+  from schema-first clarity.
 - Validation: Zod or equivalent
 - Authentication: secure email/password login
 - File storage: private storage for reports/photos, preferably Supabase Storage
