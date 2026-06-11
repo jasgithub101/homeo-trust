@@ -23,6 +23,13 @@ export const AUDIT_ACTIONS = {
   ROLE_DELETE_BLOCKED: "role_delete_blocked",
   ROLE_PERMISSIONS_CHANGED: "role_permissions_changed",
   USER_ROLES_CHANGED: "user_roles_changed",
+  // Phase 5 — patients & doctor-patient relationships
+  PATIENT_CREATED: "patient_created",
+  PATIENT_UPDATED: "patient_updated",
+  PATIENT_VIEWED: "patient_viewed",
+  DPR_CREATED: "dpr_created",
+  DPR_ENDED: "dpr_ended",
+  DPR_TRANSFERRED: "dpr_transferred",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

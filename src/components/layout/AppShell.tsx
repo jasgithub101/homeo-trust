@@ -4,6 +4,7 @@ import { Sidebar } from "./Sidebar";
 export interface AppShellUser {
   name: string;
   isAdmin: boolean;
+  canViewPatients: boolean;
 }
 
 export function AppShell({

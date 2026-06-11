@@ -3,6 +3,8 @@ import type { AppShellUser } from "./AppShell";
 
 const CLINICAL_ITEMS = [{ label: "Dashboard", href: "/dashboard", icon: "⊞" }];
 
+const PATIENTS_ITEM = { label: "Patients", href: "/patients", icon: "☺" };
+
 const ADMIN_ITEMS = [
   { label: "Users", href: "/admin/users", icon: "◈" },
   { label: "Roles", href: "/admin/roles", icon: "◉" },
@@ -25,6 +27,7 @@ export function Sidebar({ user }: { user: AppShellUser }) {
         {CLINICAL_ITEMS.map((item) => (
           <SidebarLink key={item.href} {...item} />
         ))}
+        {user.canViewPatients ? <SidebarLink {...PATIENTS_ITEM} /> : null}
 
         {user.isAdmin ? (
           <>

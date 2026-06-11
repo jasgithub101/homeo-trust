@@ -14,6 +14,9 @@ export interface CurrentUser {
   mustChangePassword: boolean;
   isAdmin: boolean;
   permissions: Set<string>;
+  // Present only for users who are clinical doctors. Used to scope patient
+  // access via DoctorPatientRelationship. Null for non-doctor users.
+  doctorProfileId: string | null;
 }
 
 /**
@@ -36,6 +39,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
       username: true,
       active: true,
       mustChangePassword: true,
+      doctorProfile: { select: { id: true } },
       userRoles: {
         select: {
           role: {
@@ -75,6 +79,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     mustChangePassword: user.mustChangePassword,
     isAdmin,
     permissions,
+    doctorProfileId: user.doctorProfile?.id ?? null,
   };
 });
 

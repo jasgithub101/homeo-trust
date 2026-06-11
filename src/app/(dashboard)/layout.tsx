@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { AppShell } from "@/components/layout/AppShell";
+import { canAccessPatientsSection } from "@/lib/permissions/patient-access";
 
 export default async function DashboardLayout({
   children,
@@ -16,7 +17,13 @@ export default async function DashboardLayout({
   }
 
   return (
-    <AppShell user={{ name: user.name, isAdmin: user.isAdmin }}>
+    <AppShell
+      user={{
+        name: user.name,
+        isAdmin: user.isAdmin,
+        canViewPatients: canAccessPatientsSection(user),
+      }}
+    >
       {children}
     </AppShell>
   );
