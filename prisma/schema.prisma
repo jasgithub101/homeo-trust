@@ -283,6 +283,13 @@ model PatientIssue {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
+  // Soft-delete / archive (Phase 6). Clinical history is preserved — rows are
+  // archived, never physically deleted. Default lists filter `deletedAt: null`.
+  // deletionReason is a short operator label, never clinical free text/PII.
+  deletedAt       DateTime?
+  deletedByUserId String?
+  deletionReason  String?
+
   patient          Patient             @relation(fields: [patientId], references: [id], onDelete: Cascade)
   symptoms         PatientSymptom[]
   treatmentEntries TreatmentEntry[]
@@ -290,6 +297,7 @@ model PatientIssue {
 
   @@index([patientId])
   @@index([status])
+  @@index([deletedAt])
 }
 
 model PatientSymptom {
@@ -305,9 +313,15 @@ model PatientSymptom {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  // Soft-delete / archive (Phase 6) — see PatientIssue note above.
+  deletedAt       DateTime?
+  deletedByUserId String?
+  deletionReason  String?
+
   patientIssue PatientIssue @relation(fields: [patientIssueId], references: [id], onDelete: Cascade)
 
   @@index([patientIssueId])
+  @@index([deletedAt])
 }
 
 // Historical, time-based doctor-patient assignment. Links to DoctorProfile.
@@ -357,6 +371,11 @@ model TreatmentEntry {
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
 
+  // Soft-delete / archive (Phase 6) — see PatientIssue note above.
+  deletedAt       DateTime?
+  deletedByUserId String?
+  deletionReason  String?
+
   patient      Patient                      @relation(fields: [patientId], references: [id], onDelete: Cascade)
   caseRecord   CaseRecord                   @relation(fields: [caseRecordId], references: [id], onDelete: Cascade)
   patientIssue PatientIssue?                @relation(fields: [patientIssueId], references: [id], onDelete: SetNull)
@@ -367,6 +386,7 @@ model TreatmentEntry {
   @@index([caseRecordId])
   @@index([patientIssueId])
   @@index([treatmentDate])
+  @@index([deletedAt])
 }
 
 model TreatmentDoctorParticipant {

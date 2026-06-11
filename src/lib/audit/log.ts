@@ -30,6 +30,22 @@ export const AUDIT_ACTIONS = {
   DPR_CREATED: "dpr_created",
   DPR_ENDED: "dpr_ended",
   DPR_TRANSFERRED: "dpr_transferred",
+  // Phase 6 — clinical workflow (case/issue/symptom/treatment).
+  // *_DELETED here means soft-delete/archive (rows are preserved). Metadata
+  // carries ids/enums + optional short deletionReason only — never PII or
+  // clinical free text.
+  CASE_CREATED: "case_created",
+  CASE_UPDATED: "case_updated",
+  CASE_VIEWED: "case_viewed",
+  ISSUE_CREATED: "issue_created",
+  ISSUE_UPDATED: "issue_updated",
+  ISSUE_DELETED: "issue_deleted",
+  SYMPTOM_CREATED: "symptom_created",
+  SYMPTOM_UPDATED: "symptom_updated",
+  SYMPTOM_DELETED: "symptom_deleted",
+  TREATMENT_CREATED: "treatment_created",
+  TREATMENT_UPDATED: "treatment_updated",
+  TREATMENT_DELETED: "treatment_deleted",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

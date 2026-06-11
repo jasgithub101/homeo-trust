@@ -80,12 +80,35 @@ Initial permission keys may include the following (grouped by category):
 
 ### Patient
 
+Patient access has **two orthogonal axes** plus admin bypass:
+
+- **Breadth** (which patients a user may reach):
+  - `patient.viewAssigned` — only patients related to the user's `DoctorProfile`
+    via `DoctorPatientRelationship` (current or past).
+  - `patient.viewAll` — all patients in the system. **Not** relationship-based,
+    so it works for users **without** a `DoctorProfile` (e.g. research/reviewer
+    staff).
+- **Depth** (which fields):
+  - `patient.viewSensitive` — full PII.
+  - `patient.viewDeidentified` — de-identified only.
+
+The axes are independent: a **depth** permission never grants row scope, and a
+**breadth** permission never reveals PII. A `viewAll` holder with no depth
+permission sees every patient **de-identified**. Admin bypasses both axes.
+
+Permission keys:
+
 - `patient.create`
+- `patient.viewAssigned`
+- `patient.viewAll`
 - `patient.viewSensitive`
 - `patient.viewDeidentified`
 - `patient.update`
 - `patient.delete`
 - `patient.assignDoctor`
+
+Example role compositions: Doctor = `viewAssigned` + `viewSensitive`; Research =
+`viewAll` + `viewDeidentified`; Clinical reviewer = `viewAll` + `viewSensitive`.
 
 ### Case
 
@@ -147,12 +170,17 @@ Implement reusable server-side authorization helpers:
   permission.
 - **`hasPermission(userId, permissionKey)`** — returns boolean.
 - **`requireAdminAccess()`** — checks whether user has admin/super permissions.
-- **`canViewSensitivePatient(user, patientId)`** — true if user has
-  `patient.viewSensitive` and is allowed by relationship rules, or has
-  admin-level access.
+- **`isPatientInScope(user, patientId)`** — the **breadth** gate: true if
+  admin OR `patient.viewAll` (any patient), or `patient.viewAssigned` AND the
+  user's `DoctorProfile` is related to the patient. All depth/action helpers
+  layer their permission on top of this.
+- **`canViewAllPatients(user)`** — true if admin OR `patient.viewAll`.
+- **`canViewSensitivePatient(user, patientId)`** — the **depth** gate: true if
+  admin OR (`patient.viewSensitive` AND `isPatientInScope`). `viewSensitive`
+  alone never grants row scope.
 - **`canViewDeidentifiedRecords(user)`** — true if user has `explore.view`.
 - **`canEditPatient(user, patientId)`** — true if user has `patient.update` and
-  relationship/admin access.
+  `isPatientInScope` (or admin).
 - **`canCreateCase(user, patientId)`** — true if user has `case.create` and
   relationship/admin access.
 - **`canDeleteCase(user, patientId)`** — true only if user has `case.delete` or
@@ -211,8 +239,14 @@ Concrete audit action identifiers implemented so far (in `AUDIT_ACTIONS`,
 `src/lib/audit/log.ts`): `login`, `failed_login`, `logout`, `password_changed`,
 `user_created` (Phase 2); `role_created`, `role_updated`, `role_deleted`,
 `role_delete_blocked`, `role_permissions_changed`, `user_roles_changed`
-(Phase 3). Remaining clinical/Explore/AI/attachment actions are added in later
-phases.
+(Phase 3); `patient_created`, `patient_updated`, `patient_viewed`,
+`dpr_created`, `dpr_ended`, `dpr_transferred` (Phase 5); `case_created`,
+`case_updated`, `case_viewed`, `issue_created`, `issue_updated`, `issue_deleted`,
+`symptom_created`, `symptom_updated`, `symptom_deleted`, `treatment_created`,
+`treatment_updated`, `treatment_deleted` (Phase 6 — the `*_deleted` clinical
+actions are **soft-delete/archive**; rows are preserved and metadata carries
+ids/enums + an optional short `deletionReason` only, never PII or clinical free
+text). Remaining Explore/AI/attachment actions are added in later phases.
 
 ## 7. Security Requirements
 

@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { requireUser, userHasPermission } from "@/lib/auth";
 import {
   canAccessPatientsSection,
+  canViewAllPatients,
   patientListWhere,
 } from "@/lib/permissions/patient-access";
 import { ageRange } from "@/lib/patients/display";
@@ -15,6 +16,10 @@ export default async function PatientsPage() {
   const showSensitive =
     user.isAdmin || userHasPermission(user, "patient.viewSensitive");
   const canCreate = user.isAdmin || userHasPermission(user, "patient.create");
+  const viewingAll = canViewAllPatients(user);
+  const scopeLabel = viewingAll
+    ? "Viewing all patients"
+    : "Viewing assigned patients";
   const where = patientListWhere(user);
 
   // Only fetch identifying fields (name + current doctor name) when the viewer
@@ -43,7 +48,9 @@ export default async function PatientsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-semibold text-slate-900">Patients</h1>
-          <p className="text-sm text-slate-500">{patients.length} patient(s).</p>
+          <p className="text-sm text-slate-500">
+            {scopeLabel} · {patients.length} patient(s).
+          </p>
         </div>
         {canCreate ? (
           <Link

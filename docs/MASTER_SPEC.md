@@ -268,7 +268,16 @@ Initial permission keys may include:
 
 ### Patient
 
+Patient access uses two orthogonal axes (see `SECURITY_MODEL.md`): **breadth**
+(`patient.viewAssigned` = related patients only; `patient.viewAll` = all
+patients, works without a `DoctorProfile`) and **depth**
+(`patient.viewSensitive` = full PII; `patient.viewDeidentified` = masked). A
+depth permission never grants row scope; a breadth permission never reveals PII.
+Admin bypasses both.
+
 * `patient.create`
+* `patient.viewAssigned`
+* `patient.viewAll`
 * `patient.viewSensitive`
 * `patient.viewDeidentified`
 * `patient.update`

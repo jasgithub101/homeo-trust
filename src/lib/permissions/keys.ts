@@ -30,9 +30,16 @@ export const PERMISSIONS = [
   { key: "permission.assign", label: "Assign permission", description: "Assign permissions to roles.", category: "User & Role Management" },
 
   // Patient
+  // Breadth (which patients) and depth (which fields) are orthogonal. Breadth =
+  // viewAssigned | viewAll (admin bypasses). Depth = viewSensitive |
+  // viewDeidentified. A depth permission NEVER grants row scope; a breadth
+  // permission NEVER reveals PII. viewAll works for users without a
+  // DoctorProfile (it is not relationship-based).
   { key: "patient.create", label: "Create patient", description: "Create patient records.", category: "Patient" },
-  { key: "patient.viewSensitive", label: "View sensitive patient", description: "View full sensitive patient PII.", category: "Patient" },
-  { key: "patient.viewDeidentified", label: "View de-identified patient", description: "View de-identified patient data.", category: "Patient" },
+  { key: "patient.viewAssigned", label: "View assigned patients", description: "See only patients you are related to via doctor assignment (breadth).", category: "Patient" },
+  { key: "patient.viewAll", label: "View all patients", description: "See all patients in the system, regardless of assignment (breadth).", category: "Patient" },
+  { key: "patient.viewSensitive", label: "View sensitive patient", description: "View full sensitive patient PII (depth). Does not grant row scope.", category: "Patient" },
+  { key: "patient.viewDeidentified", label: "View de-identified patient", description: "View de-identified patient data (depth). Does not grant row scope.", category: "Patient" },
   { key: "patient.update", label: "Update patient", description: "Update patient records.", category: "Patient" },
   { key: "patient.delete", label: "Delete patient", description: "Delete patient records.", category: "Patient" },
   { key: "patient.assignDoctor", label: "Assign doctor", description: "Assign doctors to patients.", category: "Patient" },

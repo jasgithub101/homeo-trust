@@ -12,3 +12,5 @@ coverage
 # typescript / next
 *.tsbuildinfo
 next-env.d.ts
+graphify-out/cache/
+graphify-out/cost.json

@@ -7,6 +7,7 @@ import {
   canViewSensitivePatient,
   canEditPatient,
   canManagePatientDoctors,
+  canViewAllPatients,
 } from "@/lib/permissions/patient-access";
 import { writeAuditLog, AUDIT_ACTIONS } from "@/lib/audit/log";
 import { loadDoctorOptions } from "@/lib/patients/doctors";
@@ -17,6 +18,7 @@ import {
 } from "@/components/patients/AssignmentHistory";
 import { AssignDoctorForm } from "@/components/patients/AssignDoctorForm";
 import { TransferPatientForm } from "@/components/patients/TransferPatientForm";
+import { ClinicalNav } from "@/components/clinical/ClinicalNav";
 
 function prettyGender(g: string): string {
   return g.charAt(0) + g.slice(1).toLowerCase();
@@ -90,12 +92,20 @@ export default async function PatientDetailPage({
   });
   if (!patient) notFound();
 
+  // Breadth used to reach this patient, for attributability of cross-patient
+  // access by viewAll holders. admin > all > assigned.
+  const scope = user.isAdmin
+    ? "admin"
+    : canViewAllPatients(user)
+      ? "all"
+      : "assigned";
+
   await writeAuditLog({
     action: AUDIT_ACTIONS.PATIENT_VIEWED,
     actorUserId: user.id,
     entityType: "Patient",
     entityId: patient.id,
-    metadata: { sensitive: showSensitive },
+    metadata: { sensitive: showSensitive, scope },
   });
 
   // Doctor labels: identified viewers see the doctor name; de-identified viewers
@@ -153,6 +163,8 @@ export default async function PatientDetailPage({
           </Link>
         ) : null}
       </div>
+
+      <ClinicalNav patientId={patient.id} active="overview" />
 
       <section className="rounded-lg border border-slate-200 bg-white p-6">
         <h2 className="mb-3 text-sm font-semibold text-slate-900">Details</h2>
