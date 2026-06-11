@@ -2,7 +2,8 @@
 
 > Compact state snapshot for the next Claude Code session. Read this first, then
 > `CLAUDE.md` and the phase reports in `docs/phase-reports/`.
-> Last updated end of Phase 6 implementation (pre-commit).
+> Last updated during Phase 7 (attachments) implementation. Phases 5.1 + 6 are
+> committed and tested (commit `a6af2b4`).
 
 ## 1. Project status by phase
 - **Phase 1 — Project setup**: ✅ committed.
@@ -10,14 +11,16 @@
 - **Phase 3 — Dynamic roles & permissions**: ✅ committed.
 - **Phase 4 — Core clinical schema**: ✅ committed.
 - **Phase 5 — Patient management & doctor-patient relationships**: ✅ committed.
-- **Phase 6 — Case/Issue/Symptom/Treatment workflow + timeline**: 🚧 **implemented,
-  UNCOMMITTED**. Includes one additive migration (`20260611000000_clinical_soft_delete`),
-  already applied to the local DB. Pending: manual testing + commit.
-- **Phase 5.1 — Patient scope permissions (breadth × depth)**: 🚧 **implemented,
-  UNCOMMITTED**. Added `patient.viewAssigned` / `patient.viewAll`; made breadth
-  and depth orthogonal. No schema migration (permissions are data); a **one-time**
-  role backfill ran on the dev DB. See `docs/phase-reports/phase-5.1-patient-scope-permissions.md`.
-- Phases 7–10 (attachments, Explore, AI, hardening): not started.
+- **Phase 6 — Case/Issue/Symptom/Treatment workflow + timeline**: ✅ committed
+  and tested (commit `a6af2b4`). Includes one additive migration
+  (`20260611000000_clinical_soft_delete`), applied to the local DB.
+- **Phase 5.1 — Patient scope permissions (breadth × depth)**: ✅ committed and
+  tested (commit `a6af2b4`). Added `patient.viewAssigned` / `patient.viewAll`;
+  made breadth and depth orthogonal. No schema migration (permissions are data);
+  a **one-time** role backfill ran on the dev DB. See
+  `docs/phase-reports/phase-5.1-patient-scope-permissions.md`.
+- **Phase 7 — Attachments**: 🚧 in progress (this session).
+- Phases 8–10 (Explore, AI, hardening): not started.
 
 ## 2. What Phase 6 implemented
 - **CaseRecord**: view/create/edit, one per patient (DB unique + single upsert
@@ -91,11 +94,11 @@
   migration `20260611000000_clinical_soft_delete`.
 
 ## 7. Current immediate task
-- **Phase 6 manual testing + commit.** Run verification (section 8), manually
-  test the clinical flows (case upsert, issue/symptom CRUD+archive, treatment
-  CRUD+archive with participants, PII gating, timeline, archive hiding), then
-  commit Phase 6 (app code + migration + Phase 6 report/handoff only — keep
-  graphify/tooling artifacts out of the commit).
+- **Phase 7 — Attachments.** Phases 5.1 + 6 are committed and tested. Building
+  patient attachments: storage port (local-disk driver + S3 stub), Zod
+  validation, attachment access helpers, soft-delete on `PatientAttachment`, a
+  new `attachment.view` permission, upload server action + authenticated
+  download route (signed-URL/stream), and the Attachments UI.
 
 ## 8. Commands to verify
 ```
@@ -107,7 +110,6 @@ pnpm exec prisma migrate status   # ✅ 3 migrations, DB up to date
 All four were run on the final Phase 6 state and passed.
 
 ## 9. What NOT to do next
-- ❌ Do not start Phase 7 (attachments) until Phase 6 is committed.
 - ❌ Do not implement Explore UI / AI / vector search (Phases 8–9).
 - ❌ Do not add restore/un-archive yet (deferred).
 - ❌ Do not hard-delete clinical rows — archive only.

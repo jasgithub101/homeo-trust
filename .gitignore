@@ -12,5 +12,12 @@ coverage
 # typescript / next
 *.tsbuildinfo
 next-env.d.ts
-graphify-out/cache/
-graphify-out/cost.json
+
+# graphify knowledge-graph tooling artifacts (never commit)
+# Covers graph.json, manifest.json, GRAPH_REPORT.md, graph.html, cache/, cost.json,
+# and dated snapshots (graphify-out/<date>/), plus the local skill copy.
+graphify-out/
+.claude/skills/graphify/
+
+# local attachment blob store (LocalDiskStorage) — never commit uploaded files
+var/
