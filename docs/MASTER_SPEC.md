@@ -314,9 +314,16 @@ Admin bypasses both.
 
 ### Attachments
 
+Breadth × depth (see `SECURITY_MODEL.md`): `attachment.view` lists metadata and
+downloads non-sensitive files; `attachment.viewSensitive` additionally unlocks
+the bytes of files marked sensitive. Both require the patient to be in scope;
+admin bypasses. Attachments are private by default and only reachable via the
+authenticated download route (never a public URL, never via Explore/AI).
+
 * `attachment.upload`
+* `attachment.view`
 * `attachment.viewSensitive`
-* `attachment.delete`
+* `attachment.delete` — archive (soft-delete); blob retained.
 
 ### Explore
 

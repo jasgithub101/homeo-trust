@@ -93,12 +93,37 @@
 - Edited: `patient-access.ts`, `audit/log.ts`, `prisma/schema.prisma`,
   migration `20260611000000_clinical_soft_delete`.
 
+## 6a. Phase 7 — Attachments (implemented this session)
+- **Storage port** (`src/lib/storage/{types,signing,local,s3,index}.ts`):
+  backend-agnostic `StoragePort`; `LocalDiskStorage` (default, writes to
+  gitignored non-public `var/attachments/`); `S3Storage` design stub; HMAC
+  signed-URL tokens; no-op `scanOnUpload` virus-scan seam. Keys are opaque,
+  server-generated: `patients/{patientId}/{attachmentId}/{blobId}`.
+- **Permissions**: new BREADTH key `attachment.view` (list + non-sensitive
+  download); existing `attachment.viewSensitive` is the DEPTH gate for sensitive
+  bytes. Access = permission AND `isPatientInScope` (admin bypass). Helpers:
+  `canUploadAttachment/canViewAttachment/canViewSensitiveAttachment/canDeleteAttachment`,
+  `patientScopeLabel`. One-time backfill `scripts/backfill-attachment-view.ts`
+  (NOT in seed.ts) granted `attachment.view` to the existing "Doctor" role.
+- **Soft-delete**: migration `20260611010000_attachment_soft_delete` added
+  `deletedAt`/`deletedByUserId`/`deletionReason` (+ index) to `PatientAttachment`.
+  Archive hides the row, **retains the blob** (GC deferred). No restore.
+- **Server action + route**: upload (`actions.ts`, Zod + scope + parent
+  belongs-to-patient + not-archived → `storage.put` → row → audit; rollback blob
+  on DB failure) and archive. Download route
+  `attachments/[attachmentId]/download/route.ts` re-authorizes every GET,
+  asserts `patientId` match (IDOR guard), 403s sensitive bytes without depth,
+  streams (local) or 302s to a signed URL (s3). Audit = ids/enums/size/scope only.
+- **UI**: `AttachmentsSection` + `AttachmentUploadForm` on case/issue/treatment
+  detail pages; patient-level `/attachments` index + new ClinicalNav tab; reuses
+  `ArchiveButton`. See `docs/phase-reports/phase-7-attachments.md`.
+
 ## 7. Current immediate task
-- **Phase 7 — Attachments.** Phases 5.1 + 6 are committed and tested. Building
-  patient attachments: storage port (local-disk driver + S3 stub), Zod
-  validation, attachment access helpers, soft-delete on `PatientAttachment`, a
-  new `attachment.view` permission, upload server action + authenticated
-  download route (signed-URL/stream), and the Attachments UI.
+- **Phase 7 manual testing + commit.** Code complete; lint/typecheck/build and
+  `prisma migrate status` all pass (4 migrations, DB up to date). Run the manual
+  checklist in the Phase 7 report, then commit Phase 7 (app code + migration +
+  report/handoff/spec updates only — keep graphify/tooling artifacts and
+  `.env.local` out of the commit). Housekeeping already committed as `6a5a042`.
 
 ## 8. Commands to verify
 ```

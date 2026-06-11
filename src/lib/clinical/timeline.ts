@@ -51,7 +51,7 @@ export async function buildTimeline(
           startDate: true,
           endDate: true,
           doctorProfile: {
-            select: { specialization: true, user: { select: { name: showSensitive } } },
+            select: { specialization: true, user: { select: { id: true, name: showSensitive } } },
           },
         },
       }),
@@ -86,7 +86,7 @@ export async function buildTimeline(
             select: {
               participantType: true,
               doctorProfile: {
-                select: { specialization: true, user: { select: { name: showSensitive } } },
+                select: { specialization: true, user: { select: { id: true, name: showSensitive } } },
               },
             },
           },

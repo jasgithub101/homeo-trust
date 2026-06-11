@@ -7,8 +7,13 @@ import {
   canEditTreatment,
   canArchiveTreatment,
   canViewSensitivePatient,
+  canViewAttachment,
+  canUploadAttachment,
+  canViewSensitiveAttachment,
+  canDeleteAttachment,
 } from "@/lib/permissions/patient-access";
 import { ArchiveButton } from "@/components/clinical/ArchiveButton";
+import { AttachmentsSection } from "@/components/attachments/AttachmentsSection";
 import { prettyEnum } from "@/lib/format/enum";
 import { participantLabels } from "@/lib/clinical/doctor-label";
 import { archiveTreatmentAction } from "../actions";
@@ -58,7 +63,7 @@ export default async function TreatmentDetailPage({
         select: {
           participantType: true,
           doctorProfile: {
-            select: { specialization: true, user: { select: { name: showSensitive } } },
+            select: { specialization: true, user: { select: { id: true, name: showSensitive } } },
           },
         },
       },
@@ -66,9 +71,20 @@ export default async function TreatmentDetailPage({
   });
   if (!t || t.patientId !== patientId || t.deletedAt) notFound();
 
-  const [canEdit, canArchive] = await Promise.all([
+  const [
+    canEdit,
+    canArchive,
+    showAttachments,
+    canUploadAtt,
+    canViewSensitiveAtt,
+    canDeleteAtt,
+  ] = await Promise.all([
     canEditTreatment(user, patientId),
     canArchiveTreatment(user, patientId),
+    canViewAttachment(user, patientId),
+    canUploadAttachment(user, patientId),
+    canViewSensitiveAttachment(user, patientId),
+    canDeleteAttachment(user, patientId),
   ]);
   const labels = participantLabels(t.participants, showSensitive);
 
@@ -127,6 +143,17 @@ export default async function TreatmentDetailPage({
           patientId={patientId}
           id={treatmentId}
           entityLabel="treatment entry"
+        />
+      ) : null}
+
+      {showAttachments ? (
+        <AttachmentsSection
+          patientId={patientId}
+          parentType="treatment"
+          parentId={treatmentId}
+          canUpload={canUploadAtt}
+          canViewSensitive={canViewSensitiveAtt}
+          canDelete={canDeleteAtt}
         />
       ) : null}
     </div>

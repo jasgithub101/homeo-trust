@@ -2,9 +2,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
-import { canViewCase, canEditCase } from "@/lib/permissions/patient-access";
+import {
+  canViewCase,
+  canEditCase,
+  canViewAttachment,
+  canUploadAttachment,
+  canViewSensitiveAttachment,
+  canDeleteAttachment,
+} from "@/lib/permissions/patient-access";
 import { writeAuditLog, AUDIT_ACTIONS } from "@/lib/audit/log";
 import { ClinicalNav } from "@/components/clinical/ClinicalNav";
+import { AttachmentsSection } from "@/components/attachments/AttachmentsSection";
 
 function Field({ label, value }: { label: string; value: string | null }) {
   if (!value) return null;
@@ -45,7 +53,14 @@ export default async function CasePage({
     },
   });
 
-  const canEdit = await canEditCase(user, patientId);
+  const [canEdit, showAttachments, canUploadAtt, canViewSensitiveAtt, canDeleteAtt] =
+    await Promise.all([
+      canEditCase(user, patientId),
+      canViewAttachment(user, patientId),
+      canUploadAttachment(user, patientId),
+      canViewSensitiveAttachment(user, patientId),
+      canDeleteAttachment(user, patientId),
+    ]);
 
   if (caseRecord) {
     await writeAuditLog({
@@ -107,6 +122,17 @@ export default async function CasePage({
           </dl>
         </section>
       )}
+
+      {caseRecord && showAttachments ? (
+        <AttachmentsSection
+          patientId={patientId}
+          parentType="case"
+          parentId={caseRecord.id}
+          canUpload={canUploadAtt}
+          canViewSensitive={canViewSensitiveAtt}
+          canDelete={canDeleteAtt}
+        />
+      ) : null}
     </div>
   );
 }

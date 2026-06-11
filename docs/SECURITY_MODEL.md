@@ -140,9 +140,19 @@ Example role compositions: Doctor = `viewAssigned` + `viewSensitive`; Research =
 
 ### Attachments
 
+Attachments reuse the breadth × depth split. **Breadth** (`attachment.view`)
+lists attachment metadata and downloads files **not** marked sensitive.
+**Depth** (`attachment.viewSensitive`) additionally unlocks the bytes of files
+marked `isSensitive` (the default). Both still require the owning patient to be
+in scope (`isPatientInScope`); admin bypasses both. Attachments are private by
+default, never under `public/`, and are reachable **only** through the
+authenticated, per-request-authorized download route — never a stable public
+URL, and never via Explore/AI.
+
 - `attachment.upload`
-- `attachment.viewSensitive`
-- `attachment.delete`
+- `attachment.view` — list metadata + download non-sensitive files (breadth).
+- `attachment.viewSensitive` — download files marked sensitive (depth).
+- `attachment.delete` — archive (soft-delete); the stored blob is retained.
 
 ### Explore
 

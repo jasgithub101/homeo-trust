@@ -69,9 +69,13 @@ export const PERMISSIONS = [
   { key: "treatment.delete", label: "Delete treatment", description: "Delete treatment entries.", category: "Treatment" },
 
   // Attachments
+  // Breadth (`attachment.view`) lists metadata and downloads non-sensitive
+  // files. Depth (`attachment.viewSensitive`) additionally unlocks the bytes of
+  // files marked sensitive. Both still require the patient to be in scope.
   { key: "attachment.upload", label: "Upload attachment", description: "Upload attachments.", category: "Attachments" },
-  { key: "attachment.viewSensitive", label: "View sensitive attachment", description: "View sensitive attachments.", category: "Attachments" },
-  { key: "attachment.delete", label: "Delete attachment", description: "Delete attachments.", category: "Attachments" },
+  { key: "attachment.view", label: "View attachment", description: "List attachment metadata and download non-sensitive files (breadth).", category: "Attachments" },
+  { key: "attachment.viewSensitive", label: "View sensitive attachment", description: "Download files marked sensitive (depth). Does not grant breadth.", category: "Attachments" },
+  { key: "attachment.delete", label: "Delete attachment", description: "Archive (soft-delete) attachments.", category: "Attachments" },
 
   // Explore
   { key: "explore.view", label: "View Explore", description: "Access the de-identified Explore page.", category: "Explore" },

@@ -26,7 +26,7 @@ export default async function PatientsPage() {
   // is allowed to see them; de-identified viewers get masked rows.
   const currentPrimary = {
     where: { isCurrentlyTreating: true, relationshipType: "PRIMARY_TREATING" as const },
-    select: { doctorProfile: { select: { user: { select: { name: showSensitive } } } } },
+    select: { doctorProfile: { select: { user: { select: { id: true, name: showSensitive } } } } },
   };
 
   const patients = await db.patient.findMany({

@@ -37,7 +37,7 @@ export default async function TreatmentsPage({
         select: {
           participantType: true,
           doctorProfile: {
-            select: { specialization: true, user: { select: { name: showSensitive } } },
+            select: { specialization: true, user: { select: { id: true, name: showSensitive } } },
           },
         },
       },

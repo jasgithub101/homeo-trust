@@ -83,7 +83,7 @@ export default async function PatientDetailPage({
             select: {
               id: true,
               specialization: true,
-              user: { select: { name: showSensitive } },
+              user: { select: { id: true, name: showSensitive } },
             },
           },
         },

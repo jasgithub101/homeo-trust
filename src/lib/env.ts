@@ -31,6 +31,20 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().optional(),
+
+  // Attachment storage (Phase 7). `local` (default) writes blobs to a
+  // gitignored, non-public directory; `s3` is the design stub for an
+  // S3-compatible object store (not wired yet — see src/lib/storage/s3.ts).
+  STORAGE_DRIVER: z.enum(["local", "s3"]).default("local"),
+  STORAGE_LOCAL_DIR: z.string().default("var/attachments"),
+  STORAGE_S3_BUCKET: z.string().optional(),
+  STORAGE_S3_REGION: z.string().optional(),
+  STORAGE_S3_ENDPOINT: z.string().optional(),
+  STORAGE_S3_ACCESS_KEY_ID: z.string().optional(),
+  STORAGE_S3_SECRET_ACCESS_KEY: z.string().optional(),
+  STORAGE_S3_FORCE_PATH_STYLE: z
+    .union([z.boolean(), z.enum(["true", "false"]).transform((v) => v === "true")])
+    .optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

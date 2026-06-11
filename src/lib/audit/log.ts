@@ -46,6 +46,12 @@ export const AUDIT_ACTIONS = {
   TREATMENT_CREATED: "treatment_created",
   TREATMENT_UPDATED: "treatment_updated",
   TREATMENT_DELETED: "treatment_deleted",
+  // Phase 7 — attachments. *_DELETED is soft-delete/archive (blob retained,
+  // row hidden). Metadata = ids/enums/sizeBytes/scope + optional short reason
+  // only. NEVER log fileName (may carry PII), file bytes, or free text.
+  ATTACHMENT_UPLOADED: "attachment_uploaded",
+  ATTACHMENT_VIEWED: "attachment_viewed",
+  ATTACHMENT_DELETED: "attachment_deleted",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

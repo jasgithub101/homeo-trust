@@ -60,6 +60,17 @@ export async function isPatientInScope(
   return false;
 }
 
+/**
+ * A short, PII-free label for the user's BREADTH scope, for audit metadata.
+ * Never includes ids or names — just how the user reached the row.
+ */
+export function patientScopeLabel(user: CurrentUser): "admin" | "all" | "assigned" | "none" {
+  if (user.isAdmin) return "admin";
+  if (userHasPermission(user, "patient.viewAll")) return "all";
+  if (userHasPermission(user, "patient.viewAssigned")) return "assigned";
+  return "none";
+}
+
 /** Can the user open the Patients section at all? Breadth-based. */
 export function canAccessPatientsSection(user: CurrentUser): boolean {
   return (
@@ -160,6 +171,21 @@ export const canEditTreatment = (u: CurrentUser, p: string) =>
   permittedAndRelated(u, p, "treatment.update");
 export const canArchiveTreatment = (u: CurrentUser, p: string) =>
   permittedAndRelated(u, p, "treatment.delete");
+
+// --- Attachments (Phase 7) ---
+// Breadth × depth, orthogonal. `attachment.view` is the BREADTH gate for
+// attachments: it lists metadata and downloads NON-sensitive files. Reading the
+// bytes of an `isSensitive` file additionally requires the DEPTH permission
+// `attachment.viewSensitive` (see the download route). Every gate also requires
+// the owning patient to be in scope (admin bypasses both axes).
+export const canUploadAttachment = (u: CurrentUser, p: string) =>
+  permittedAndRelated(u, p, "attachment.upload");
+export const canViewAttachment = (u: CurrentUser, p: string) =>
+  permittedAndRelated(u, p, "attachment.view");
+export const canViewSensitiveAttachment = (u: CurrentUser, p: string) =>
+  permittedAndRelated(u, p, "attachment.viewSensitive");
+export const canDeleteAttachment = (u: CurrentUser, p: string) =>
+  permittedAndRelated(u, p, "attachment.delete");
 
 /**
  * Prisma `where` filter scoping the patient list (BREADTH):

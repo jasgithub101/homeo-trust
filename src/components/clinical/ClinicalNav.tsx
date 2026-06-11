@@ -5,13 +5,20 @@ import Link from "next/link";
  * each target page enforces its own permission+relationship guard server-side
  * (an unauthorized tab resolves to notFound), so showing the tabs leaks nothing.
  */
-type Tab = "overview" | "case" | "issues" | "treatments" | "timeline";
+type Tab =
+  | "overview"
+  | "case"
+  | "issues"
+  | "treatments"
+  | "attachments"
+  | "timeline";
 
 const TABS: { key: Tab; label: string; sub: string }[] = [
   { key: "overview", label: "Overview", sub: "" },
   { key: "case", label: "Case", sub: "/case" },
   { key: "issues", label: "Issues", sub: "/issues" },
   { key: "treatments", label: "Treatments", sub: "/treatments" },
+  { key: "attachments", label: "Attachments", sub: "/attachments" },
   { key: "timeline", label: "Timeline", sub: "/timeline" },
 ];
 
