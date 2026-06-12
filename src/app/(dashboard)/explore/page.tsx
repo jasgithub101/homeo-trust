@@ -8,7 +8,6 @@ import { exploreFilterSchema, type ExploreFilters } from "@/lib/validation/explo
 import { runExploreSearch } from "@/lib/explore/query";
 import { ExploreFiltersForm } from "@/components/explore/ExploreFilters";
 import { ExploreResults } from "@/components/explore/ExploreResults";
-import { RefreshIndexButton } from "@/components/explore/RefreshIndexButton";
 import { logExploreSearch } from "./actions";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -79,15 +78,12 @@ export default async function ExplorePage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-lg font-semibold text-slate-900">Explore</h1>
-          <p className="text-sm text-slate-500">
-            De-identified case explorer. No patient, doctor, or contact details
-            are ever shown — results are coarse and cohort-protected.
-          </p>
-        </div>
-        {user.isAdmin ? <RefreshIndexButton /> : null}
+      <div>
+        <h1 className="text-lg font-semibold text-slate-900">Explore</h1>
+        <p className="text-sm text-slate-500">
+          De-identified case explorer. No patient, doctor, or contact details
+          are ever shown — results are coarse and cohort-protected.
+        </p>
       </div>
 
       <ExploreFiltersForm current={filters} />

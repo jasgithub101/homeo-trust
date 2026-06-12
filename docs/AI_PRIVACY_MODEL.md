@@ -88,35 +88,51 @@ Anonymization labels — use generated anonymous labels such as:
 
 ---
 
-## 3. Recommended Explore Dataset — ExploreCaseIndex
+## 3. Recommended Explore Dataset — explore_case_view
 
-Create a de-identified view/table such as `ExploreCaseIndex` (full field list in
-`DATA_MODEL.md`). It contains de-identified fields only: `anonymousCaseCode`,
-`ageRange`, `gender`, `city`/`state`/`country` (nullable), `issueSummaries`,
-`symptomSummaries`, `medicineSummaries`, `issueStatuses`, `treatmentTypes`,
-`potencies`, `caseMonth`, `patientConditionSummary`, `improvementTrend`. The
-`patientId` and `caseRecordId` are internal only and must never be shown in the
-UI (or selected into any client-bound payload).
+Explore reads a de-identified Postgres **VIEW**, `explore_case_view` (Prisma
+model `ExploreCaseView`; see `DATA_MODEL.md`). The view exposes de-identified
+columns only: `ageRange`, `gender`, `city`/`state`/`country` (nullable),
+`issueSummaries`, `symptomSummaries`, `medicineSummaries`, `issueStatuses`,
+`treatmentTypes`, `potencies`, `caseMonth`, `patientConditionSummary`,
+`improvementTrend`. There is **no real patient/case id column** at all; a
+synthetic positional `rowId` exists solely to satisfy Prisma's view-identifier
+requirement and is never selected into a client-bound payload. Per-result
+display labels (`Case A/B/…`) are assigned **ephemerally in the query layer**,
+so there is no stable, persistent handle to a de-identified case.
+
+> **Mechanism note (refactored from the original materialized table).** The
+> earlier design used a materialized `ExploreCaseIndex` table populated by a
+> projection + rebuild. That has been replaced by a live view. The de-id
+> guarantee is now **"correct by view definition + query-only-the-view"** rather
+> than **"PII physically absent from a separate store."** This is slightly weaker
+> (a query against base tables could re-introduce PII), so the security-critical
+> points are the **view definition** and the **rule that Explore/AI query only
+> the view**. The payoff is that the view is always fresh — no projection,
+> rebuild, refresh action, or staleness window.
 
 Rules:
 
-- Explore UI must read from the de-identified dataset, **not** raw `Patient`
-  tables.
-- Internal IDs should not be exposed to the frontend unless required and safe.
-- Build filters against de-identified fields.
+- Explore/AI must read from the de-identified **view**, **not** raw `Patient`
+  tables and never attachments.
+- No real internal id (patientId/caseRecordId) is exposed by the view; the
+  synthetic `rowId` stays out of any client-bound payload.
+- Build filters against de-identified view columns.
 
 ### 3.1 Phase 8 implementation (Explore)
 
-- **De-identify on the way IN, not on read.** A single projection chokepoint,
-  `src/lib/explore/projection.ts#projectPatient`, is the source of truth for
-  every de-identified value. The index stores only already-de-identified data,
-  so a read can never re-derive PII. The rebuild orchestrator
-  (`src/lib/explore/rebuild.ts`) is the only writer; Explore (and later AI) only
-  read `ExploreCaseIndex`.
-- **Coarsening (D1):** age → decade band via `ageRange()`; `caseMonth` at
-  `YYYY-MM` (never an exact timestamp/DOB); `city` is kept **only** when its
-  cohort is ≥ `EXPLORE_MIN_COHORT` (5), otherwise coarsened to state-only;
-  `state`/`country` are always coarse.
+- **De-identify by view definition.** `explore_case_view` SELECTs only
+  coarsened/structured columns and never the PII tables' raw fields, so a read
+  cannot surface PII — there is simply no PII column to select. The view is the
+  single source of truth for every de-identified value; there is no separate
+  projection module or writer (the view reads live base tables on every query).
+- **Coarsening:** age → decade band (`floor(age/10)*10`, no upper bound, NULL for
+  null/negative); `caseMonth` at `YYYY-MM` (never an exact timestamp/DOB); `city`
+  is kept **only** when its cohort is ≥ `EXPLORE_MIN_COHORT` (5) computed by a
+  window over the full qualifying set, otherwise coarsened to state-only;
+  `state`/`country` are always coarse. ⚠️ The `5` is duplicated as a literal in
+  the view DDL and in `EXPLORE_MIN_COHORT` (constants.ts) — a documented sync
+  point, since a view cannot import a TS constant.
 - **k-anonymity on read (D2):** `src/lib/explore/query.ts` counts the matching
   cohort first and, when it is `< EXPLORE_MIN_COHORT`, suppresses **both** the
   rows and the count, returning only a "broaden filters" state. Zero matches and
@@ -128,10 +144,14 @@ Rules:
   cohorts, accepting the re-identification risk that suppression otherwise
   mitigates. Revoke the bypass on a role to enforce the floor for that role.
 - **Allow-list select:** `query.ts` selects de-identified columns by an explicit
-  allow-list and never returns `patientId`/`caseRecordId`/the index id/timestamps
-  — the structural guarantee that internal/linking ids cannot leak.
-- **`anonymousCaseCode` is CSPRNG-random**, generated once and preserved across
-  rebuilds — never a hash/transform of any id (that would be reversible).
+  allow-list (a compile-time guarantee via the typed `ExploreCaseView` model that
+  a PII column cannot be selected) and never returns the synthetic `rowId` — the
+  structural guarantee that no internal/linking id can leak. This select is the
+  load-bearing "query only the view" control.
+- **Ephemeral case labels:** results carry a `Case A/B/…` display label derived
+  only from position in the result set, assigned in `query.ts`. It is recomputed
+  every search, is not stable across sessions, and is not derived from any
+  patient/case id — there is deliberately no persistent handle to a case.
 - **Access (D3)** is binary: `admin || explore.view`. There is no row scope and
   no depth escalation here — a `patient.viewSensitive` holder still sees only
   de-identified Explore. Admin bypasses **access**, never de-identification.
@@ -140,13 +160,12 @@ Rules:
   **default-granted to Explore roles** (one-time `scripts/backfill-explore-bypass.ts`),
   so the privacy floor is opt-IN per role. It lifts ONLY the suppression backstop:
   every other de-identification rule above (allow-list select, no raw tables, no
-  PII fields, projection-time city coarsening) still holds for these viewers.
-- **Sync (D6):** the index is refreshed by the idempotent
-  `scripts/rebuild-explore-index.ts` or the admin "Refresh Explore index" action;
-  there are **no on-write hooks yet**, so there is a documented **staleness
-  window** between a clinical edit and the next refresh. Archived
-  (`deletedAt != null`) issues/symptoms/treatments and patients without a
-  `CaseRecord` are excluded at projection time.
+  PII fields, view-defined city coarsening) still holds for these viewers.
+- **Always fresh (no sync step):** because the view reads live base tables, there
+  is no index, rebuild, refresh action, or staleness window — a clinical edit is
+  reflected on the next query. Archived (`deletedAt != null`)
+  issues/symptoms/treatments and patients without a `CaseRecord` are excluded by
+  the view definition.
 
 ### 3.2 RESIDUAL PII-LEAK PATH — free text in structured fields (D5) ⚠️
 
@@ -157,8 +176,9 @@ normalized (trim/collapse/dedupe/length-cap).
 
 **However, k-anonymity does NOT mitigate PII that a user types into these short
 fields** (e.g. a patient name entered as an issue title). This is the one
-residual PII-leak path into Explore — and, because **Phase 9 (AI) consumes this
-same index**, into AI as well. The future fix is a controlled vocabulary or a
+residual PII-leak path into Explore — and, because **Phase 9 (AI) must consume
+this same view** (`explore_case_view`, never the base PII tables), into AI as
+well. The future fix is a controlled vocabulary or a
 server-side PII scrub on projection; it is **NOT built yet**. Until then, operator
 training and field hygiene are the only controls on these fields.
 

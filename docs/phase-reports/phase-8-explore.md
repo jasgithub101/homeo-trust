@@ -1,5 +1,31 @@
 # Phase 8 Report — Explore (de-identified case explorer)
 
+> **⚠️ SUPERSEDED MECHANISM (post-Phase-8 refactor).** This report describes the
+> original implementation, which de-identified into a **materialized
+> `ExploreCaseIndex` table** via a projection chokepoint
+> (`src/lib/explore/projection.ts`) and a rebuild/refresh writer
+> (`rebuild.ts`, `scripts/rebuild-explore-index.ts`, admin "Refresh index"). That
+> machinery has been **removed**. Explore now reads a live de-identified Postgres
+> **VIEW**, `explore_case_view` (Prisma model `ExploreCaseView`), created in
+> `prisma/migrations/20260612010000_create_explore_case_view`; the table was
+> dropped in `20260612020000_drop_explore_case_index`.
+>
+> What changed conceptually: de-identification is now **"correct by view
+> definition + query-only-the-view"** instead of **"PII physically absent from a
+> separate store"** — slightly weaker (a query against base tables could
+> re-introduce PII), so the **view definition** and the **allow-list select in
+> `query.ts` ("query only the view")** are the security-critical points. The
+> `anonymousCaseCode` is no longer a stored CSPRNG value; results get an
+> **ephemeral `Case A/B/…` label** assigned per result set in `query.ts`. The
+> view is always fresh, so the **staleness window, on-write-sync TODO, the
+> rebuild script, and the Refresh button no longer exist**. The N=5 city
+> coarsening now lives as a literal in the view DDL (a documented sync point with
+> `EXPLORE_MIN_COHORT`); query-layer N=5 suppression is unchanged. Everything
+> below about *de-identification policy* (what is coarsened, the blocklist, the
+> residual free-text leak path, Phase 9 AI must read the view) still holds — only
+> the storage mechanism changed. See `SECURITY_MODEL.md` / `AI_PRIVACY_MODEL.md`
+> for the current normative description.
+
 ## Goals
 
 Give authorized staff a system-wide, **de-identified** case explorer: browse and

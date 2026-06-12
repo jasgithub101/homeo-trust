@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["views"]
 }
 
 datasource db {
@@ -246,7 +247,6 @@ model Patient {
   doctorRelationships DoctorPatientRelationship[]
   treatmentEntries    TreatmentEntry[]
   attachments         PatientAttachment[]
-  exploreIndex        ExploreCaseIndex?
 
   @@index([createdAt])
 }
@@ -446,39 +446,39 @@ model PatientAttachment {
 // De-identified, physically-separate index for Explore/AI. Explore/AI read ONLY
 // from here, never from raw Patient. patientId/caseRecordId are INTERNAL ONLY
 // and must never be selected to the client. Populated/refreshed in Phase 8.
-model ExploreCaseIndex {
-  id                      String   @id @default(cuid())
-  patientId               String   @unique // internal only — never expose
-  caseRecordId            String? // internal only — denormalized reference (no FK)
-  anonymousCaseCode       String   @unique
+// De-identified Explore surface (Phase 8, refactor). A live Postgres VIEW —
+// `explore_case_view` — is the SINGLE source Explore/AI may read. It SELECTs
+// only coarsened/safe, structured columns and never the PII tables' raw fields,
+// so de-identification is "correct by view definition": the view simply has no
+// column for name/phone/email/exact address/emergency contact/DOB/doctor/exact
+// patient or case id. Always fresh (no materialization, no rebuild, no
+// staleness). The view itself does NOT suppress small cohorts — the N=5
+// k-anonymity backstop is enforced in the app query layer (see
+// src/lib/explore/query.ts), as is the city-cohort coarsening threshold.
+//
+// `rowId` is a SYNTHETIC positional row number (row_number(), recomputed every
+// query). It exists ONLY to satisfy Prisma's view-model identifier requirement.
+// It is NOT a real id, is NOT derived from patient/case identity, is NEVER part
+// of the client allow-list select, and is not stable across queries. Display
+// labels (Case A/B/…) are assigned ephemerally in the query layer, not here.
+view ExploreCaseView {
+  rowId                   BigInt               @unique
   ageRange                String?
   gender                  Gender?
   city                    String?
   state                   String?
   country                 String?
+  caseMonth               String?
   issueSummaries          String[]
   symptomSummaries        String[]
   medicineSummaries       String[]
-  // De-identified, filterable facets (Phase 8). Enum arrays + coarse caseMonth
-  // (YYYY-MM, never an exact timestamp). Potencies are short structured values.
   issueStatuses           IssueStatus[]
   treatmentTypes          TreatmentEntryType[]
   potencies               String[]
-  caseMonth               String?
   patientConditionSummary String?
   improvementTrend        String?
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
 
-  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
-
-  @@index([gender])
-  @@index([ageRange])
-  @@index([city])
-  @@index([state])
-  @@index([country])
-  @@index([caseMonth])
-  @@index([patientConditionSummary])
+  @@map("explore_case_view")
 }
 
 // Only de-identified query text + responses are stored (no raw PII).

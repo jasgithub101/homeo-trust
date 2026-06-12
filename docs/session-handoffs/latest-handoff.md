@@ -6,6 +6,19 @@
 > committed (commit `e7e7271`); Phase 8 is implemented and verified but **not yet
 > committed** (awaiting approval).
 
+> **⚠️ Explore mechanism refactored (post-Phase-8).** Explore no longer uses the
+> materialized `ExploreCaseIndex` table or its projection/rebuild/refresh. It now
+> reads a live de-identified Postgres **VIEW**, `explore_case_view` (Prisma model
+> `ExploreCaseView`). Removed: `src/lib/explore/projection.ts`, `rebuild.ts`,
+> `scripts/rebuild-explore-index.ts`, the Refresh action/button. Kept & re-pointed
+> at the view: `query.ts` (allow-list select + N=5 suppression + bypass),
+> `validation/explore.ts`, `explore-access.ts`, the `EXPLORE_SEARCHED` audit, the
+> Explore UI. `anonymousCaseCode` is now an **ephemeral per-result label** (no
+> stored code). Guarantee is now **"correct by view definition + query-only-the-
+> view"** (slightly weaker than physical absence). The references below to
+> `ExploreCaseIndex` / `projectPatient` / rebuild reflect the OLD design; treat
+> `SECURITY_MODEL.md` + `AI_PRIVACY_MODEL.md` as current.
+
 ## 1. Project status by phase
 - **Phase 1 — Project setup**: ✅ committed.
 - **Phase 2 — Auth & first admin**: ✅ committed.

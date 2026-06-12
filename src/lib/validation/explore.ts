@@ -5,7 +5,7 @@ import { ISSUE_STATUS_VALUES, TREATMENT_ENTRY_TYPES } from "./clinical";
 /**
  * Zod schema for Explore filters (Phase 8). Every filter is validated
  * server-side and is an enum / coarse band / coarse-location string only — the
- * same de-identified shape stored in ExploreCaseIndex. No PII, no free-text
+ * same de-identified shape exposed by explore_case_view. No PII, no free-text
  * search, no exact ids. These validated values are also what gets written to
  * the EXPLORE_SEARCHED audit log, so they must stay PII-safe by construction.
  */

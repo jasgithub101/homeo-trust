@@ -6,7 +6,7 @@ import { EXPLORE_AGE_RANGES, type ExploreFilters } from "@/lib/validation/explor
 /**
  * De-identified Explore filter form. A plain GET form (no client JS): filters
  * become shareable query params and the page re-runs the search server-side.
- * Every control maps to a coarse, de-identified facet of ExploreCaseIndex —
+ * Every control maps to a coarse, de-identified facet of explore_case_view —
  * there is intentionally no free-text search box.
  */
 export function ExploreFiltersForm({ current }: { current: ExploreFilters }) {

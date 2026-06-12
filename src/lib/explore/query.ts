@@ -5,33 +5,39 @@ import { EXPLORE_MIN_COHORT } from "./constants";
 import type { ExploreFilters } from "@/lib/validation/explore";
 
 /**
- * Explore read layer (Phase 8). The ONLY place a request reads de-identified
- * case data, and it reads EXCLUSIVELY from ExploreCaseIndex — never the raw
- * Patient/CaseRecord/PatientIssue/PatientSymptom/TreatmentEntry tables, never
- * attachments.
+ * Explore read layer (Phase 8, view refactor). The ONLY place a request reads
+ * de-identified case data, and it reads EXCLUSIVELY from the `explore_case_view`
+ * Postgres VIEW (Prisma model `ExploreCaseView`) — never the raw Patient/
+ * CaseRecord/PatientIssue/PatientSymptom/TreatmentEntry tables, never
+ * attachments. De-identification is "correct by view definition": the view has
+ * no column for any PII or for the real patient/case id, so none can be selected
+ * here. A live view is always fresh — there is no index, rebuild, or staleness.
  *
- * Two structural privacy guarantees live here:
+ * Three structural privacy guarantees live here:
  *  1. EXPLICIT ALLOW-LIST SELECT — we name every de-identified column we return
- *     and never `select` the row wholesale. patientId, caseRecordId, the index
- *     id, and timestamps are NEVER selected, so internal/linking ids cannot leak
- *     into a client-bound payload.
- *  2. K-ANONYMITY (D2) — if the matching cohort is smaller than
+ *     and never `select` the row wholesale. The synthetic `rowId` (a positional
+ *     row_number in the view, used only as Prisma's view identifier and for a
+ *     stable secondary sort) is NEVER selected into a client-bound payload.
+ *  2. EPHEMERAL CASE LABELS — results carry a display label (Case A/B/…) derived
+ *     ONLY from position in this result set. It is recomputed every search, is
+ *     NOT stable across sessions, and is NOT derived from any patient/case id —
+ *     there is deliberately no persistent handle to a de-identified case.
+ *  3. K-ANONYMITY (D2) — if the matching cohort is smaller than
  *     EXPLORE_MIN_COHORT, we suppress BOTH the rows AND the count and return a
  *     "broaden filters" state. count == 0 and 0 < count < N collapse into the
  *     same state so the viewer cannot even distinguish "none" from "a few".
  *     This backstop can be lifted per-viewer via `explore.bypassCohortMinimum`
  *     (passed in as `applySuppression: false`); the bypass affects ONLY this
- *     row/count suppression. Guarantee (1) and all other de-identification
- *     (including the projection-time city-cohort coarsening already baked into
- *     the stored index) still apply to every viewer — bypass never exposes PII.
+ *     row/count suppression. Guarantees (1)/(2) and all other de-identification
+ *     (including the view's city-cohort coarsening, which uses the SAME N over
+ *     the full set) still apply to every viewer — bypass never exposes PII.
  */
 
 const EXPLORE_RESULT_LIMIT = 500;
 
 /** Allow-list of de-identified columns returned to the client. Keep in sync
- * with ExploreRow. Internal ids and timestamps are deliberately absent. */
-const exploreRowSelect = {
-  anonymousCaseCode: true,
+ * with ExploreRow. The synthetic `rowId` is deliberately absent. */
+const exploreViewSelect = {
   ageRange: true,
   gender: true,
   city: true,
@@ -46,11 +52,18 @@ const exploreRowSelect = {
   potencies: true,
   patientConditionSummary: true,
   improvementTrend: true,
-} satisfies Prisma.ExploreCaseIndexSelect;
+} satisfies Prisma.ExploreCaseViewSelect;
 
-export type ExploreRow = Prisma.ExploreCaseIndexGetPayload<{
-  select: typeof exploreRowSelect;
+type ExploreViewRow = Prisma.ExploreCaseViewGetPayload<{
+  select: typeof exploreViewSelect;
 }>;
+
+/**
+ * A de-identified Explore row as shown to the client: the view's allow-listed
+ * columns plus an EPHEMERAL `anonymousCaseCode` display label assigned in this
+ * module from result position only (see guarantee 2 above).
+ */
+export type ExploreRow = ExploreViewRow & { anonymousCaseCode: string };
 
 export type ExploreResult =
   | { status: "ok"; resultCount: number; rows: ExploreRow[] }
@@ -67,9 +80,24 @@ export interface ExploreSearchOptions {
   applySuppression?: boolean;
 }
 
-/** Build the index `where` from validated filters. Array facets use `has`. */
-function buildWhere(filters: ExploreFilters): Prisma.ExploreCaseIndexWhereInput {
-  const where: Prisma.ExploreCaseIndexWhereInput = {};
+/**
+ * Ephemeral, position-only display label: 0 -> "Case A", 25 -> "Case Z",
+ * 26 -> "Case AA", … . Spreadsheet-style so it stays short for large result
+ * sets. Carries no patient/case identity.
+ */
+function ephemeralCaseLabel(index: number): string {
+  let n = index;
+  let letters = "";
+  do {
+    letters = String.fromCharCode(65 + (n % 26)) + letters;
+    n = Math.floor(n / 26) - 1;
+  } while (n >= 0);
+  return `Case ${letters}`;
+}
+
+/** Build the view `where` from validated filters. Array facets use `has`. */
+function buildWhere(filters: ExploreFilters): Prisma.ExploreCaseViewWhereInput {
+  const where: Prisma.ExploreCaseViewWhereInput = {};
   if (filters.gender) where.gender = filters.gender;
   if (filters.ageRange) where.ageRange = filters.ageRange;
   if (filters.country) {
@@ -97,17 +125,23 @@ export async function runExploreSearch(
   const applySuppression = options.applySuppression ?? true;
   const where = buildWhere(filters);
 
-  const resultCount = await db.exploreCaseIndex.count({ where });
+  const resultCount = await db.exploreCaseView.count({ where });
   if (applySuppression && resultCount < EXPLORE_MIN_COHORT) {
     return { status: "suppressed" };
   }
 
-  const rows = await db.exploreCaseIndex.findMany({
+  const viewRows = await db.exploreCaseView.findMany({
     where,
-    select: exploreRowSelect,
-    orderBy: [{ caseMonth: "desc" }, { anonymousCaseCode: "asc" }],
+    select: exploreViewSelect,
+    // rowId is the view's stable positional sort key; never selected/returned.
+    orderBy: [{ caseMonth: "desc" }, { rowId: "asc" }],
     take: EXPLORE_RESULT_LIMIT,
   });
+
+  const rows: ExploreRow[] = viewRows.map((row, i) => ({
+    ...row,
+    anonymousCaseCode: ephemeralCaseLabel(i),
+  }));
 
   return { status: "ok", resultCount, rows };
 }

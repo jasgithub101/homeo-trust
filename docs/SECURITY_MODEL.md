@@ -195,10 +195,24 @@ URL, and never via Explore/AI.
 
 ### Explore
 
+> **Mechanism (Phase 8, refactored):** Explore is now backed by a live,
+> de-identified Postgres VIEW — `explore_case_view` (Prisma model
+> `ExploreCaseView`) — **not** the former materialized `ExploreCaseIndex` table.
+> The view SELECTs only coarsened/structured, non-PII columns and never the real
+> patient/case id, so de-identification is **correct by view definition** (the
+> view simply has no column for PII or for a real id). The two security-critical
+> invariants are therefore: **(1)** the view definition itself, and **(2)** the
+> rule that Explore/AI **query only the view**, never the base tables. This is a
+> *slightly weaker* guarantee than the old table's "PII is physically absent from
+> a separate store" — a wrong query against base tables could re-introduce PII —
+> so the "query only the view" discipline (enforced by the allow-list select in
+> `src/lib/explore/query.ts`) is load-bearing. In exchange, the view is always
+> fresh: there is no projection, rebuild, refresh action, or staleness window.
+
 - `explore.view` — **the single Explore gate (Phase 8).** Access is binary:
   `admin || explore.view`. It gates both the page (`notFound()` otherwise) and
   the sidebar nav. There is no patient row scope and no depth escalation — a
-  `patient.viewSensitive` holder still sees only the de-identified index, and
+  `patient.viewSensitive` holder still sees only the de-identified view, and
   admin bypasses **access**, never de-identification.
 - `explore.filter` — folded into `explore.view` for Phase 8 (decision D7); the
   key stays seeded for future granularity but is not separately enforced.
@@ -209,15 +223,16 @@ URL, and never via Explore/AI.
   (via the one-time `scripts/backfill-explore-bypass.ts`), making the privacy
   floor **opt-IN per role** — revoke it on a role to enforce suppression for that
   role. Scope is narrow: it lifts ONLY the row/count suppression. It does **not**
-  change core de-identification — Explore still reads only `ExploreCaseIndex`,
+  change core de-identification — Explore still reads only `explore_case_view`,
   never raw PII/attachments, and never emits name/phone/email/address/DOB/exact
-  ids/doctor name; city-cohort coarsening (a projection-time property) still
-  applies to everyone. The tradeoff it accepts is **re-identification risk from
-  very small cohorts**, which also matters once Phase 9 AI consumes this index.
+  ids/doctor name; city-cohort coarsening (baked into the view definition, using
+  the same `EXPLORE_MIN_COHORT`) still applies to everyone. The tradeoff it
+  accepts is **re-identification risk from very small cohorts**, which also
+  matters once Phase 9 AI consumes this same view.
 - `explore.viewDoctorName` — future explicit permission allowing doctor names to
   be shown in Explore. Doctor names stay hidden unless a user holds this; in
-  Phase 8 the doctor is **structurally absent** from the index (no doctor id is
-  ever projected), so this remains future work.
+  Phase 8 the doctor is **structurally absent** from the view (no doctor id is
+  ever a column), so this remains future work.
 
 ### AI
 

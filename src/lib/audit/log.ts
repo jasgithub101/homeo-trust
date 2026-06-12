@@ -59,6 +59,8 @@ export const AUDIT_ACTIONS = {
   // enums/bands/coarse location, resultCount, and a suppressed flag. NEVER log
   // result patient ids, anonymous case codes, names, or any free text.
   EXPLORE_SEARCHED: "explore_searched",
+  // Retained but NO LONGER EMITTED: the Explore view refactor removed the index
+  // refresh action. Kept so historical audit rows with this action stay labeled.
   EXPLORE_INDEX_REFRESHED: "explore_index_refreshed",
 } as const;
 
