@@ -93,9 +93,10 @@ Anonymization labels — use generated anonymous labels such as:
 Create a de-identified view/table such as `ExploreCaseIndex` (full field list in
 `DATA_MODEL.md`). It contains de-identified fields only: `anonymousCaseCode`,
 `ageRange`, `gender`, `city`/`state`/`country` (nullable), `issueSummaries`,
-`symptomSummaries`, `medicineSummaries`, `patientConditionSummary`,
-`improvementTrend`. The `patientId` and `caseRecordId` are internal only and
-must never be shown in the UI.
+`symptomSummaries`, `medicineSummaries`, `issueStatuses`, `treatmentTypes`,
+`potencies`, `caseMonth`, `patientConditionSummary`, `improvementTrend`. The
+`patientId` and `caseRecordId` are internal only and must never be shown in the
+UI (or selected into any client-bound payload).
 
 Rules:
 
@@ -103,6 +104,63 @@ Rules:
   tables.
 - Internal IDs should not be exposed to the frontend unless required and safe.
 - Build filters against de-identified fields.
+
+### 3.1 Phase 8 implementation (Explore)
+
+- **De-identify on the way IN, not on read.** A single projection chokepoint,
+  `src/lib/explore/projection.ts#projectPatient`, is the source of truth for
+  every de-identified value. The index stores only already-de-identified data,
+  so a read can never re-derive PII. The rebuild orchestrator
+  (`src/lib/explore/rebuild.ts`) is the only writer; Explore (and later AI) only
+  read `ExploreCaseIndex`.
+- **Coarsening (D1):** age → decade band via `ageRange()`; `caseMonth` at
+  `YYYY-MM` (never an exact timestamp/DOB); `city` is kept **only** when its
+  cohort is ≥ `EXPLORE_MIN_COHORT` (5), otherwise coarsened to state-only;
+  `state`/`country` are always coarse.
+- **k-anonymity on read (D2):** `src/lib/explore/query.ts` counts the matching
+  cohort first and, when it is `< EXPLORE_MIN_COHORT`, suppresses **both** the
+  rows and the count, returning only a "broaden filters" state. Zero matches and
+  1–4 matches collapse into the same state so a small cohort can be neither
+  displayed nor sized. **Known limitations:** (a) this does not defend against
+  differencing attacks (comparing cohort A vs A+B to infer the delta); (b) the
+  backstop is per-viewer optional via `explore.bypassCohortMinimum` (see below),
+  which is default-granted to Explore roles — so by default viewers DO see small
+  cohorts, accepting the re-identification risk that suppression otherwise
+  mitigates. Revoke the bypass on a role to enforce the floor for that role.
+- **Allow-list select:** `query.ts` selects de-identified columns by an explicit
+  allow-list and never returns `patientId`/`caseRecordId`/the index id/timestamps
+  — the structural guarantee that internal/linking ids cannot leak.
+- **`anonymousCaseCode` is CSPRNG-random**, generated once and preserved across
+  rebuilds — never a hash/transform of any id (that would be reversible).
+- **Access (D3)** is binary: `admin || explore.view`. There is no row scope and
+  no depth escalation here — a `patient.viewSensitive` holder still sees only
+  de-identified Explore. Admin bypasses **access**, never de-identification.
+- **Cohort-minimum bypass** (`admin || explore.bypassCohortMinimum`): lifts the
+  D2 row/count suppression for the holder, who then sees cohorts `< N`. It is
+  **default-granted to Explore roles** (one-time `scripts/backfill-explore-bypass.ts`),
+  so the privacy floor is opt-IN per role. It lifts ONLY the suppression backstop:
+  every other de-identification rule above (allow-list select, no raw tables, no
+  PII fields, projection-time city coarsening) still holds for these viewers.
+- **Sync (D6):** the index is refreshed by the idempotent
+  `scripts/rebuild-explore-index.ts` or the admin "Refresh Explore index" action;
+  there are **no on-write hooks yet**, so there is a documented **staleness
+  window** between a clinical edit and the next refresh. Archived
+  (`deletedAt != null`) issues/symptoms/treatments and patients without a
+  `CaseRecord` are excluded at projection time.
+
+### 3.2 RESIDUAL PII-LEAK PATH — free text in structured fields (D5) ⚠️
+
+Summaries are sourced **only** from short structured fields — `PatientIssue.title`,
+`PatientSymptom.symptomName`, `TreatmentEntry.medicineName` — and **never** from
+`description`/`notes`/`instructions`/`followUpNotes`/`caseDescription`. They are
+normalized (trim/collapse/dedupe/length-cap).
+
+**However, k-anonymity does NOT mitigate PII that a user types into these short
+fields** (e.g. a patient name entered as an issue title). This is the one
+residual PII-leak path into Explore — and, because **Phase 9 (AI) consumes this
+same index**, into AI as well. The future fix is a controlled vocabulary or a
+server-side PII scrub on projection; it is **NOT built yet**. Until then, operator
+training and field hygiene are the only controls on these fields.
 
 ---
 

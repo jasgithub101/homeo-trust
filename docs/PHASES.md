@@ -170,7 +170,7 @@ Goals:
 
 ---
 
-## Phase 8: Explore Page
+## Phase 8: Explore Page — ✅ implemented
 
 Goals:
 
@@ -192,9 +192,39 @@ Goals:
 - Never expose raw attachments
 - Audit Explore searches
 
+Delivered (see `docs/phase-reports/phase-8-explore.md`):
+
+- De-identification chokepoint `projectPatient` populates `ExploreCaseIndex`
+  (D4 added `issueStatuses`, `treatmentTypes`, `potencies`, `caseMonth`).
+  Coarsening: age band, `caseMonth` (YYYY-MM), city kept only when its cohort
+  ≥ 5 (else state-only). CSPRNG `anonymousCaseCode`.
+- Read layer reads **only** `ExploreCaseIndex` via an explicit allow-list select
+  (no `patientId`/`caseRecordId`); server-enforced **k-anonymity** suppresses
+  rows **and** count when the matching cohort `< 5`.
+- Filters shipped this phase: gender, age range, state, country, issue status,
+  treatment type. (Free-text issue/symptom/medicine/potency/exact-date filters
+  are deferred — see the phase report's "future".)
+- Binary access (`admin || explore.view`) gates page + nav; `explore.filter`
+  folded in (D7). Audit `explore_searched` / `explore_index_refreshed` with
+  PII-safe metadata only.
+- Sync via idempotent `scripts/rebuild-explore-index.ts` + admin "Refresh
+  Explore index" action (no on-write hooks yet → documented staleness window).
+
+**Known residual risk (D5):** summaries source only structured short fields, but
+k-anonymity does NOT scrub PII a user types into them. Controlled vocabulary /
+server-side PII scrub is the future fix (not built). Phase 9 (AI) consumes this
+same index.
+
 ---
 
-## Phase 9: AI Similarity Assistant
+## Phase 9: AI Similarity Assistant — ⏸ DEFERRED
+
+> **Parked, not dropped.** Phase 8 left a clean seam for this: the de-identified
+> `ExploreCaseIndex` (the dataset AI would consume) and the `AISearchLog` model
+> both remain in place, so the phase can be revived without rework. **Before
+> reviving it, build the D5 controlled-vocabulary / server-side PII scrub** so AI
+> does not inherit Explore's free-text PII leak path. The next active phase is
+> **Phase 10**.
 
 Goals:
 

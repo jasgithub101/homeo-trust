@@ -5,6 +5,8 @@ const CLINICAL_ITEMS = [{ label: "Dashboard", href: "/dashboard", icon: "⊞" }]
 
 const PATIENTS_ITEM = { label: "Patients", href: "/patients", icon: "☺" };
 
+const EXPLORE_ITEM = { label: "Explore", href: "/explore", icon: "◎" };
+
 const ADMIN_ITEMS = [
   { label: "Users", href: "/admin/users", icon: "◈" },
   { label: "Roles", href: "/admin/roles", icon: "◉" },
@@ -28,6 +30,7 @@ export function Sidebar({ user }: { user: AppShellUser }) {
           <SidebarLink key={item.href} {...item} />
         ))}
         {user.canViewPatients ? <SidebarLink {...PATIENTS_ITEM} /> : null}
+        {user.canUseExplore ? <SidebarLink {...EXPLORE_ITEM} /> : null}
 
         {user.isAdmin ? (
           <>

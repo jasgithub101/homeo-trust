@@ -768,6 +768,10 @@ Fields:
 * `issueSummaries`
 * `symptomSummaries`
 * `medicineSummaries`
+* `issueStatuses` — Phase 8 (D4), filterable de-identified facet
+* `treatmentTypes` — Phase 8 (D4), filterable de-identified facet
+* `potencies` — Phase 8 (D4), filterable de-identified facet
+* `caseMonth` — Phase 8 (D4), coarse `YYYY-MM` (never an exact date)
 * `patientConditionSummary`
 * `improvementTrend`
 * `createdAt`
@@ -778,6 +782,16 @@ Rules:
 * Explore UI must read from the de-identified dataset, not raw `Patient` tables.
 * Internal IDs should not be exposed to the frontend unless required and safe.
 * Build filters against de-identified fields.
+
+**Phase 8 status:** implemented. The index is now populated by a single
+de-identification chokepoint (`src/lib/explore/projection.ts`) via an idempotent
+rebuild (`scripts/rebuild-explore-index.ts` / admin "Refresh Explore index"),
+read only through an explicit allow-list select that never returns
+`patientId`/`caseRecordId`, and protected by server-enforced k-anonymity
+(`EXPLORE_MIN_COHORT = 5`): searches whose matching cohort is smaller suppress
+both rows and count. Full design, residual risks (free-text PII in structured
+fields, differencing attacks, staleness window), and the de-identification rules
+live in `docs/AI_PRIVACY_MODEL.md` §3 and `docs/phase-reports/phase-8-explore.md`.
 
 ---
 

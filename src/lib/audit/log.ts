@@ -52,6 +52,11 @@ export const AUDIT_ACTIONS = {
   ATTACHMENT_UPLOADED: "attachment_uploaded",
   ATTACHMENT_VIEWED: "attachment_viewed",
   ATTACHMENT_DELETED: "attachment_deleted",
+  // Phase 8 — de-identified Explore. Metadata is PII-SAFE ONLY: filters as
+  // enums/bands/coarse location, resultCount, and a suppressed flag. NEVER log
+  // result patient ids, anonymous case codes, names, or any free text.
+  EXPLORE_SEARCHED: "explore_searched",
+  EXPLORE_INDEX_REFRESHED: "explore_index_refreshed",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

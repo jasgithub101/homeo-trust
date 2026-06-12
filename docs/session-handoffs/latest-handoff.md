@@ -2,8 +2,9 @@
 
 > Compact state snapshot for the next Claude Code session. Read this first, then
 > `CLAUDE.md` and the phase reports in `docs/phase-reports/`.
-> Last updated during Phase 7 (attachments) implementation. Phases 5.1 + 6 are
-> committed and tested (commit `a6af2b4`).
+> Last updated during Phase 8 (Explore) implementation. Phase 7 (attachments) is
+> committed (commit `e7e7271`); Phase 8 is implemented and verified but **not yet
+> committed** (awaiting approval).
 
 ## 1. Project status by phase
 - **Phase 1 — Project setup**: ✅ committed.
@@ -19,8 +20,15 @@
   made breadth and depth orthogonal. No schema migration (permissions are data);
   a **one-time** role backfill ran on the dev DB. See
   `docs/phase-reports/phase-5.1-patient-scope-permissions.md`.
-- **Phase 7 — Attachments**: 🚧 in progress (this session).
-- Phases 8–10 (Explore, AI, hardening): not started.
+- **Phase 7 — Attachments**: ✅ committed (commit `e7e7271`).
+- **Phase 8 — Explore (de-identified case explorer)**: ✅ implemented, verified,
+  and committed (includes the `explore.bypassCohortMinimum` per-role cohort-floor
+  bypass). One additive migration (`20260612000000_explore_index_facets`) applied
+  to the dev DB. See `docs/phase-reports/phase-8-explore.md`.
+- **Phase 9 — AI similarity assistant**: ⏸ **DEFERRED** (parked, not dropped —
+  `ExploreCaseIndex` + `AISearchLog` remain so it can be revived; build the D5
+  PII scrub first).
+- **Phase 10 — Security, testing, polish**: next active phase, not started.
 
 ## 2. What Phase 6 implemented
 - **CaseRecord**: view/create/edit, one per patient (DB unique + single upsert
@@ -51,9 +59,10 @@
 
 ## 4. Database / migration status
 - Local PostgreSQL `homeo_trust_dev` @ `localhost:5432`.
-- `prisma migrate status`: **3 migrations, "Database schema is up to date."**
+- `prisma migrate status`: **5 migrations, "Database schema is up to date."**
   (`20260610000000_init_auth`, `20260610010000_clinical_schema`,
-  `20260611000000_clinical_soft_delete`).
+  `20260611000000_clinical_soft_delete`, `20260611010000_attachment_soft_delete`,
+  `20260612000000_explore_index_facets`).
 - Migration flow: dev user lacks `CREATEDB`, so generate SQL with
   `prisma migrate diff --from-config-datasource prisma.config.ts --to-schema
   prisma/schema.prisma --script` (read-only) and apply with `prisma migrate
@@ -118,12 +127,55 @@
   detail pages; patient-level `/attachments` index + new ClinicalNav tab; reuses
   `ArchiveButton`. See `docs/phase-reports/phase-7-attachments.md`.
 
+## 6b. Phase 8 — Explore (implemented this session)
+- **De-identification chokepoint** `src/lib/explore/projection.ts#projectPatient`
+  (pure; imported by both the request layer and the node rebuild script) is the
+  single source of truth. Coarsening (D1): age band, `caseMonth` YYYY-MM, city
+  kept only when its cohort ≥ 5 (else state-only). `anonymousCaseCode` is CSPRNG
+  (`node:crypto`), create-only (preserved across rebuilds), never derived from ids.
+- **Writer**: `src/lib/explore/rebuild.ts` (only writer; takes the Prisma client
+  as a param so the CLI and the admin refresh action share it). Upserts by
+  `patientId`, deletes stale rows, excludes patients without a `CaseRecord` and
+  archived issues/symptoms/treatments. `EXPLORE_MIN_COHORT = 5` in
+  `src/lib/explore/constants.ts` (used for both city retention and query suppression).
+- **Reader**: `src/lib/explore/query.ts` (only request-time reader). Explicit
+  allow-list `select` (never `patientId`/`caseRecordId`/index id/timestamps) +
+  server-enforced k-anonymity: cohort `< 5` → `{ status: "suppressed" }` (no rows,
+  no count; 0 and 1–4 collapse to the same state).
+- **Access** (D3): binary `admin || explore.view` (`src/lib/permissions/explore-access.ts`).
+  No row scope, no depth escalation. Gates page (`notFound()`) + nav (`canUseExplore`).
+  `explore.filter` folded in (D7). Audit `explore_searched` (filters/`resultCount`
+  null-when-suppressed/`suppressed`/`cohortBypass`) + `explore_index_refreshed` (counts only).
+- **Cohort-floor bypass** (D8): new permission `explore.bypassCohortMinimum`
+  (`canBypassCohortMinimum` = `admin || granted`) lifts ONLY the read-time <5
+  row/count suppression (`runExploreSearch(filters, { applySuppression })`).
+  **Default-granted to Explore roles** via one-time `scripts/backfill-explore-bypass.ts`
+  (NOT in seed.ts) → privacy floor is opt-IN per role. Never changes core
+  de-identification (no raw tables, no PII fields, city still coarsened at projection).
+- **D4 migration** `20260612000000_explore_index_facets`: additive columns
+  `issueStatuses`/`treatmentTypes`/`potencies`/`caseMonth` + `caseMonth` index.
+  No DPR touch. Applied with `migrate deploy`.
+- **Sync** (D6): `scripts/rebuild-explore-index.ts` + admin "Refresh Explore
+  index" action. No on-write hooks → documented staleness window.
+- **Filters shipped**: gender/age/state/country/issue-status/treatment-type.
+  Medicine/symptom/potency/exact-date deferred (facets exist in the index).
+- **Residual risk (D5)**: summaries source only `title`/`symptomName`/`medicineName`,
+  but k-anonymity does NOT scrub PII typed into them. Future fix: controlled
+  vocab / PII scrub (not built). **Phase 9 AI consumes this same index.**
+- One-time `scripts/backfill-explore-view.ts` (NOT in seed.ts) grants
+  `explore.view` to existing Explore-holding non-admin roles.
+
 ## 7. Current immediate task
-- **Phase 7 manual testing + commit.** Code complete; lint/typecheck/build and
-  `prisma migrate status` all pass (4 migrations, DB up to date). Run the manual
-  checklist in the Phase 7 report, then commit Phase 7 (app code + migration +
-  report/handoff/spec updates only — keep graphify/tooling artifacts and
-  `.env.local` out of the commit). Housekeeping already committed as `6a5a042`.
+- **Phase 8 is committed.** Code complete and verified: lint (0 errors, 2 benign
+  warnings) / typecheck / build pass; `prisma migrate status` = 5 migrations, DB
+  up to date; seed (44 permissions) + both backfills + rebuild ran on dev data;
+  de-identification, cohort suppression, and the bypass permission verified. Login
+  confirmed working. The dev DB also carries a manual-test fixture from
+  `scripts/seed-explore-testdata.ts` (4 test users/roles incl. one Explore role
+  with the bypass and one without; 11 cohort-sized patients) — that script is dev
+  test data, NOT committed.
+- **Next active phase: Phase 10** (Security, Testing, and Polish). Phase 9 (AI) is
+  deferred. Do NOT start the next phase without approval.
 
 ## 8. Commands to verify
 ```
@@ -135,7 +187,12 @@ pnpm exec prisma migrate status   # ✅ 3 migrations, DB up to date
 All four were run on the final Phase 6 state and passed.
 
 ## 9. What NOT to do next
-- ❌ Do not implement Explore UI / AI / vector search (Phases 8–9).
+- ❌ Do not implement AI / vector search / embeddings / case-similarity (Phase 9),
+  the D5 PII scrubber / controlled vocabulary, on-write Explore sync hooks, or
+  GIN array indexes yet — all deferred.
+- ❌ Do not read raw Patient/clinical tables from Explore, or select
+  `patientId`/`caseRecordId` into any client payload — Explore reads only
+  `ExploreCaseIndex` via the allow-list select.
 - ❌ Do not add restore/un-archive yet (deferred).
 - ❌ Do not hard-delete clinical rows — archive only.
 - ❌ Do not run destructive DB resets (`prisma migrate reset`, `dropdb`).

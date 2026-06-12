@@ -80,6 +80,7 @@ export const PERMISSIONS = [
   // Explore
   { key: "explore.view", label: "View Explore", description: "Access the de-identified Explore page.", category: "Explore" },
   { key: "explore.filter", label: "Filter Explore", description: "Filter de-identified Explore records.", category: "Explore" },
+  { key: "explore.bypassCohortMinimum", label: "Bypass Explore cohort minimum", description: "See Explore results for cohorts smaller than the privacy minimum (lifts the <5-case suppression backstop only; never reveals PII).", category: "Explore" },
   { key: "explore.viewDoctorName", label: "View doctor name in Explore", description: "Reveal doctor names in Explore (hidden by default).", category: "Explore" },
 
   // AI

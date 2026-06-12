@@ -5,6 +5,7 @@ export interface AppShellUser {
   name: string;
   isAdmin: boolean;
   canViewPatients: boolean;
+  canUseExplore: boolean;
 }
 
 export function AppShell({

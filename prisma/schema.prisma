@@ -459,6 +459,12 @@ model ExploreCaseIndex {
   issueSummaries          String[]
   symptomSummaries        String[]
   medicineSummaries       String[]
+  // De-identified, filterable facets (Phase 8). Enum arrays + coarse caseMonth
+  // (YYYY-MM, never an exact timestamp). Potencies are short structured values.
+  issueStatuses           IssueStatus[]
+  treatmentTypes          TreatmentEntryType[]
+  potencies               String[]
+  caseMonth               String?
   patientConditionSummary String?
   improvementTrend        String?
   createdAt               DateTime @default(now())
@@ -471,6 +477,7 @@ model ExploreCaseIndex {
   @@index([city])
   @@index([state])
   @@index([country])
+  @@index([caseMonth])
   @@index([patientConditionSummary])
 }
 
