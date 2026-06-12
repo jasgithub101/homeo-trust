@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { APP_NAME } from "@/lib/branding";
@@ -24,6 +25,11 @@ export default async function LoginPage({
           <p className="text-sm text-slate-500">Sign in to continue</p>
         </div>
         <LoginForm next={next} />
+        <p className="text-center text-sm text-slate-500">
+          <Link href="/forgot-password" className="text-brand-700 hover:underline">
+            Forgot password?
+          </Link>
+        </p>
       </div>
     </main>
   );

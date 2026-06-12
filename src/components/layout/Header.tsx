@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { logoutAction } from "@/app/(auth)/actions";
 import type { AppShellUser } from "./AppShell";
 
@@ -14,6 +15,12 @@ export function Header({ user }: { user: AppShellUser }) {
             Admin
           </span>
         ) : null}
+        <Link
+          href="/change-password"
+          className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+        >
+          Change password
+        </Link>
         <form action={logoutAction}>
           <button
             type="submit"

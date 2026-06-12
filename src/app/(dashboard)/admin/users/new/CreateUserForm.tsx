@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
+import { OneTimeSecret } from "@/components/ui/OneTimeSecret";
 import { createUserAction, type CreateUserState } from "./actions";
 
 const initialState: CreateUserState = {};
@@ -67,13 +68,17 @@ export function CreateUserForm({
         <p className="text-sm text-green-800">
           User <strong>{state.success.name}</strong> (username{" "}
           <code>{state.success.username}</code>) was created
-          {state.success.isDoctor ? " with a doctor profile" : ""}. Temporary
-          login credentials have been sent to {state.success.email}. They must
-          set a new password on first login.
+          {state.success.isDoctor ? " with a doctor profile" : ""}. They must set
+          a new password on first login.
         </p>
+        <OneTimeSecret
+          label={`Temporary password for ${state.success.username}`}
+          value={state.success.tempPassword}
+        />
         <p className="text-xs text-green-700">
-          In development with no SMTP configured, the credentials are printed to
-          the server console (marked development-only).
+          {state.success.mailDelivered
+            ? `An invite email was also sent to ${state.success.email}.`
+            : "No invite email was sent — hand the temporary password to the user directly."}
         </p>
         <div className="flex gap-3">
           <Link

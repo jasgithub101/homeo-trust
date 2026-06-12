@@ -13,7 +13,16 @@ import { createUserSchema } from "@/lib/validation/auth";
 export interface CreateUserState {
   error?: string;
   fieldErrors?: Record<string, string[]>;
-  success?: { name: string; username: string; email: string; isDoctor: boolean };
+  success?: {
+    name: string;
+    username: string;
+    email: string;
+    isDoctor: boolean;
+    /** One-time display — never persisted/logged; admin hands it over. */
+    tempPassword: string;
+    /** Whether the invite email was actually delivered (best-effort). */
+    mailDelivered: boolean;
+  };
 }
 
 function emptyToNull(v: string | undefined): string | null {
@@ -126,26 +135,42 @@ export async function createUserAction(
     });
   }
 
-  // Send credentials. In dev (no SMTP) this prints to the server console,
-  // clearly marked development-only; in production it is emailed.
-  const appUrl = env().NEXT_PUBLIC_APP_URL;
-  await sendMail({
-    to: email,
-    subject: `Your ${APP_NAME_SHORT} account`,
-    text: [
-      `Hello ${input.name},`,
-      "",
-      `An account has been created for you on ${APP_NAME}.`,
-      "",
-      `  Sign in:   ${appUrl}/login`,
-      `  Username:  ${input.username}`,
-      `  Temporary password: ${tempPassword}`,
-      "",
-      "You will be required to set a new password on first login.",
-      "",
-      `— ${APP_NAME}`,
-    ].join("\n"),
-  });
+  // Email is BEST-EFFORT and decoupled from success: the admin always receives
+  // the temp password on screen to hand over, so a missing/disabled/failing
+  // mailer must never block or fail user creation. If SMTP is configured it
+  // sends; otherwise (dev console fallback, or any error) we simply record that
+  // delivery did not happen. The temp password is never logged here.
+  const e = env();
+  // Only attempt delivery when SMTP is actually configured. This deliberately
+  // skips the mailer's dev console fallback so the temp password is NEVER
+  // written to a log/console — the admin uses the one-time on-screen value.
+  const smtpConfigured = Boolean(e.SMTP_HOST && e.SMTP_PORT);
+  let mailDelivered = false;
+  if (smtpConfigured) {
+    try {
+      await sendMail({
+        to: email,
+        subject: `Your ${APP_NAME_SHORT} account`,
+        text: [
+          `Hello ${input.name},`,
+          "",
+          `An account has been created for you on ${APP_NAME}.`,
+          "",
+          `  Sign in:   ${e.NEXT_PUBLIC_APP_URL}/login`,
+          `  Username:  ${input.username}`,
+          `  Temporary password: ${tempPassword}`,
+          "",
+          "You will be required to set a new password on first login.",
+          "",
+          `— ${APP_NAME}`,
+        ].join("\n"),
+      });
+      mailDelivered = true;
+    } catch {
+      // Swallow — the admin hands over the on-screen temp password instead.
+      mailDelivered = false;
+    }
+  }
 
   return {
     success: {
@@ -153,6 +178,8 @@ export async function createUserAction(
       username: input.username,
       email,
       isDoctor: input.isDoctor,
+      tempPassword,
+      mailDelivered,
     },
   };
 }

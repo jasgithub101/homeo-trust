@@ -10,6 +10,10 @@ import {
   createSession,
 } from "@/lib/auth";
 import { getRequestInfo } from "@/lib/auth/request-info";
+import {
+  checkLoginRateLimit,
+  resetLoginRateLimit,
+} from "@/lib/auth/rate-limit";
 import { writeAuditLog, AUDIT_ACTIONS } from "@/lib/audit/log";
 import {
   changePasswordSchema,
@@ -75,6 +79,18 @@ export async function changePasswordAction(
     return { fieldErrors: parsed.error.flatten().fieldErrors };
   }
 
+  // Rate-limit the current-password verification so this action can't be used
+  // as a password-guessing oracle (reuses the login limiter, keyed per user).
+  const rlKey = `pwchange:${user.id}`;
+  const rl = checkLoginRateLimit(rlKey);
+  if (!rl.allowed) {
+    return {
+      error: `Too many attempts. Try again in about ${Math.ceil(
+        rl.retryAfterSeconds / 60,
+      )} minute(s).`,
+    };
+  }
+
   const record = await db.user.findUnique({
     where: { id: user.id },
     select: { passwordHash: true },
@@ -83,11 +99,15 @@ export async function changePasswordAction(
     return { error: "Account not found." };
   }
 
+  // Server-side, constant-time (argon2) verification of the CURRENT password —
+  // never trust the session alone to authorize a password change.
   const ok = await verifyPassword(record.passwordHash, parsed.data.currentPassword);
   if (!ok) {
     return { fieldErrors: { currentPassword: ["Current password is incorrect"] } };
   }
 
+  // Correct current password → clear the limiter for this user.
+  resetLoginRateLimit(rlKey);
   await applyNewPassword(user.id, parsed.data.newPassword);
   redirect("/dashboard");
 }

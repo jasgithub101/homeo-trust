@@ -28,7 +28,21 @@
 - **Phase 9 — AI similarity assistant**: ⏸ **DEFERRED** (parked, not dropped —
   `ExploreCaseIndex` + `AISearchLog` remain so it can be revived; build the D5
   PII scrub first).
+- **App display-name rename** → "Pujya Sai Master Homeo Vaidyalayam" / short "Sai
+  Master Homeo" (`src/lib/branding.ts`): ✅ committed (`74bdd53`). Display strings
+  only; internal "Homeo Trust" name unchanged.
+- **Password features + email decouple** (not a numbered phase; no migration):
+  ✅ implemented. Self change-password entry point + current-password
+  re-verify + oracle rate-limit; admin reset (`user.update`, no self-reset,
+  ADMIN-target needs admin, kills all target sessions, one-time temp-password
+  display); static no-enumeration `/forgot-password`; create-user decoupled from
+  email (temp password shown on screen, SMTP-gated best-effort send). Security
+  reasoning recorded in `SECURITY_MODEL.md` §3.1. **Browser click-through of the
+  security flows still pending** (can't drive request-scoped actions headlessly).
 - **Phase 10 — Security, testing, polish**: next active phase, not started.
+  Pending lightweight trims: remove the now-best-effort mailer dependency
+  (`src/lib/mail/*`, only referenced by `users/new/actions.ts`); the queued dev
+  display-rename is separate.
 
 ## 2. What Phase 6 implemented
 - **CaseRecord**: view/create/edit, one per patient (DB unique + single upsert

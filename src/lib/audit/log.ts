@@ -15,6 +15,9 @@ export const AUDIT_ACTIONS = {
   FAILED_LOGIN: "failed_login",
   LOGOUT: "logout",
   PASSWORD_CHANGED: "password_changed",
+  // Admin reset of another user's password. Metadata is ids/enums ONLY — never
+  // the temp password or any hash.
+  PASSWORD_RESET_BY_ADMIN: "password_reset_by_admin",
   USER_CREATED: "user_created",
   // Phase 3 — roles & permissions
   ROLE_CREATED: "role_created",

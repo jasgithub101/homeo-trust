@@ -3,13 +3,14 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireAdminAccess } from "@/lib/permissions/check";
 import { RoleAssignmentForm } from "@/components/admin/RoleAssignmentForm";
+import { ResetPasswordButton } from "@/components/admin/ResetPasswordButton";
 
 export default async function UserDetailPage({
   params,
 }: {
   params: Promise<{ userId: string }>;
 }) {
-  await requireAdminAccess();
+  const actor = await requireAdminAccess();
   const { userId } = await params;
 
   const [user, roles] = await Promise.all([
@@ -95,6 +96,29 @@ export default async function UserDetailPage({
           roles={roles}
           assignedRoleIds={assignedRoleIds}
         />
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-slate-900">Security</h2>
+        {actor.id === user.id ? (
+          <p className="text-sm text-slate-500">
+            To change your own password, use{" "}
+            <Link href="/change-password" className="text-brand-700 hover:underline">
+              Change password
+            </Link>
+            .
+          </p>
+        ) : (
+          <>
+            <p className="text-sm text-slate-500">
+              Reset this user&rsquo;s password if they have forgotten it. A
+              one-time temporary password is shown to you to hand over in person;
+              the user must change it on next login, and all their sessions are
+              signed out.
+            </p>
+            <ResetPasswordButton userId={user.id} userName={user.name} />
+          </>
+        )}
       </section>
     </div>
   );

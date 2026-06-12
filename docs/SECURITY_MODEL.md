@@ -53,15 +53,54 @@ The initial `ADMIN` system role:
 
 ## 3. User Onboarding Security
 
-- Admin creates a username and temporary password for a new doctor; details are
-  sent by email.
-- On first login, the doctor must be forced to set a new password.
-- Preferred: secure one-time invite link.
-- Alternative: temporary password + `mustChangePassword = true`, forcing an
-  immediate password change after first login.
+- Admin creates a username and a temporary password for a new user.
+- On first login, the user is forced to set a new password
+  (`mustChangePassword = true`).
 - Admin can deactivate users and create another admin.
 - The system must protect against accidentally deleting or deactivating the
   **last admin** (admin-lockout protection).
+
+### 3.1 Password flows (self-change, admin reset, recovery)
+
+Three flows share the temp-password + `mustChangePassword` machinery; there is
+**no self-service email recovery** (recovery is admin-driven). Email is fully
+**decoupled** — every flow works with the mailer disabled/absent.
+
+- **Self change-password** (`changePasswordAction`, normal branch): the logged-in
+  user's **current password is re-verified server-side** (argon2, constant-time)
+  before the change — the session alone is never sufficient. That verification is
+  **rate-limited** (the login limiter, keyed `pwchange:{userId}`, cleared on
+  success) so the form can't be used as a password-guessing oracle. On success
+  all of the user's sessions are invalidated and a fresh one is issued (other
+  devices are logged out; the caller stays signed in).
+- **Admin reset** (`resetUserPasswordAction`): generates a temp password, sets
+  `mustChangePassword = true`, **invalidates ALL of the target's sessions**, and
+  shows the temp password to the admin **once on screen** to hand over in person
+  (never emailed, never persisted in plaintext, never logged). Gating:
+  - permission **`user.update`** (no new key);
+  - **self-reset is refused** (use self change-password);
+  - resetting a user who holds **ADMIN additionally requires the actor to be an
+    admin**, because a reset hands the actor a credential that authenticates AS
+    the target — it must not be a privilege-escalation path.
+  - **Residual (documented):** the ADMIN guard closes the worst case, but a
+    non-admin `user.update` holder could still reset a *more-privileged
+    non-admin* and impersonate them. This is **moot today because the
+    user-detail page is admin-only**, so only admins reach the action. **If that
+    page is ever opened to non-admin `user.update` holders, this reopens** and a
+    stronger guard is required (e.g. refuse to reset any user whose privileges
+    exceed the actor's, or a dedicated reset capability).
+- **Forgot-password (logged out)**: a **static** page that says to contact an
+  administrator. It takes no identifier and never confirms whether an account
+  exists, so it **cannot be used for user enumeration**.
+
+Audit for these flows is ids/enums only — `PASSWORD_CHANGED` (actor id),
+`PASSWORD_RESET_BY_ADMIN` (actor + target id + `targetIsAdmin`). **Never** the
+temp password or any hash. The create-user flow only attempts email when SMTP is
+configured, so the temp password is never routed to the dev console fallback.
+
+The brute-force/oracle limiter is in-memory and single-instance, which is the
+**appropriate lightweight choice for the intended single-instance (self-hosted)
+deployment**; revisit only if the app is ever run multi-instance.
 
 ## 4. Example Permissions
 
