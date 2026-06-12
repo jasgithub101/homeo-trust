@@ -136,7 +136,7 @@ export async function uploadAttachmentAction(
   const blobId = randomUUID();
   const key = buildAttachmentKey(patientId, attachmentId, blobId);
 
-  const storage = getStorage();
+  const storage = await getStorage();
   const body = Buffer.from(await file.arrayBuffer());
   await storage.put({ key, body, contentType: file.type });
 

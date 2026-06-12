@@ -24,14 +24,6 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
 
-  // Optional SMTP (Phase 2 onboarding email). When unset, dev falls back to
-  // logging the message to the server console; production must configure SMTP.
-  SMTP_HOST: z.string().optional(),
-  SMTP_PORT: z.coerce.number().int().positive().optional(),
-  SMTP_USER: z.string().optional(),
-  SMTP_PASS: z.string().optional(),
-  SMTP_FROM: z.string().optional(),
-
   // Attachment storage (Phase 7). `local` (default) writes blobs to a
   // gitignored, non-public directory; `s3` is the design stub for an
   // S3-compatible object store (not wired yet — see src/lib/storage/s3.ts).

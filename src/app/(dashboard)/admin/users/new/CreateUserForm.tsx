@@ -76,9 +76,8 @@ export function CreateUserForm({
           value={state.success.tempPassword}
         />
         <p className="text-xs text-green-700">
-          {state.success.mailDelivered
-            ? `An invite email was also sent to ${state.success.email}.`
-            : "No invite email was sent — hand the temporary password to the user directly."}
+          Hand the temporary password to the user directly — it is shown once and
+          cannot be retrieved later.
         </p>
         <div className="flex gap-3">
           <Link

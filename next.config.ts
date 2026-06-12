@@ -1,6 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Self-hosting footprint: emit a self-contained production server under
+  // `.next/standalone` so customers run `node server.js` (a lean Node process)
+  // instead of the dev server. Keeps RAM/CPU low on a regular Windows laptop.
+  output: "standalone",
+  // Never ship browser source maps in production (smaller build, no source
+  // leakage). This is the default; set explicitly so it can't silently change.
+  productionBrowserSourceMaps: false,
   experimental: {
     serverActions: {
       // Attachment uploads go through a Server Action, whose body defaults to a

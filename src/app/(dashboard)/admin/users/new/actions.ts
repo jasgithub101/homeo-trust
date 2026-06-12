@@ -4,10 +4,7 @@ import { db } from "@/lib/db";
 import { requireAdminAccess } from "@/lib/permissions/check";
 import { hashPassword } from "@/lib/auth";
 import { generateTempPassword } from "@/lib/auth/temp-password";
-import { sendMail } from "@/lib/mail/mailer";
 import { writeAuditLog, AUDIT_ACTIONS } from "@/lib/audit/log";
-import { env } from "@/lib/env";
-import { APP_NAME, APP_NAME_SHORT } from "@/lib/branding";
 import { createUserSchema } from "@/lib/validation/auth";
 
 export interface CreateUserState {
@@ -20,8 +17,6 @@ export interface CreateUserState {
     isDoctor: boolean;
     /** One-time display — never persisted/logged; admin hands it over. */
     tempPassword: string;
-    /** Whether the invite email was actually delivered (best-effort). */
-    mailDelivered: boolean;
   };
 }
 
@@ -135,43 +130,9 @@ export async function createUserAction(
     });
   }
 
-  // Email is BEST-EFFORT and decoupled from success: the admin always receives
-  // the temp password on screen to hand over, so a missing/disabled/failing
-  // mailer must never block or fail user creation. If SMTP is configured it
-  // sends; otherwise (dev console fallback, or any error) we simply record that
-  // delivery did not happen. The temp password is never logged here.
-  const e = env();
-  // Only attempt delivery when SMTP is actually configured. This deliberately
-  // skips the mailer's dev console fallback so the temp password is NEVER
-  // written to a log/console — the admin uses the one-time on-screen value.
-  const smtpConfigured = Boolean(e.SMTP_HOST && e.SMTP_PORT);
-  let mailDelivered = false;
-  if (smtpConfigured) {
-    try {
-      await sendMail({
-        to: email,
-        subject: `Your ${APP_NAME_SHORT} account`,
-        text: [
-          `Hello ${input.name},`,
-          "",
-          `An account has been created for you on ${APP_NAME}.`,
-          "",
-          `  Sign in:   ${e.NEXT_PUBLIC_APP_URL}/login`,
-          `  Username:  ${input.username}`,
-          `  Temporary password: ${tempPassword}`,
-          "",
-          "You will be required to set a new password on first login.",
-          "",
-          `— ${APP_NAME}`,
-        ].join("\n"),
-      });
-      mailDelivered = true;
-    } catch {
-      // Swallow — the admin hands over the on-screen temp password instead.
-      mailDelivered = false;
-    }
-  }
-
+  // No email is sent: user creation always surfaces the temp password once,
+  // on screen, for the admin to hand over (the one-time OneTimeSecret display).
+  // The temp password is never logged or persisted in clear.
   return {
     success: {
       name: input.name,
@@ -179,7 +140,6 @@ export async function createUserAction(
       email,
       isDoctor: input.isDoctor,
       tempPassword,
-      mailDelivered,
     },
   };
 }

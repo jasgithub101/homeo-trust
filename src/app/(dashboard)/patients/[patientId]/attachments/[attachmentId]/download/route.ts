@@ -103,7 +103,7 @@ export async function GET(
     },
   });
 
-  const storage = getStorage();
+  const storage = await getStorage();
 
   // Object stores hand out a short-lived presigned URL; local disk streams.
   if (env().STORAGE_DRIVER === "s3") {
