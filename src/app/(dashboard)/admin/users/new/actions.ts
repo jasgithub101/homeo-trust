@@ -7,6 +7,7 @@ import { generateTempPassword } from "@/lib/auth/temp-password";
 import { sendMail } from "@/lib/mail/mailer";
 import { writeAuditLog, AUDIT_ACTIONS } from "@/lib/audit/log";
 import { env } from "@/lib/env";
+import { APP_NAME, APP_NAME_SHORT } from "@/lib/branding";
 import { createUserSchema } from "@/lib/validation/auth";
 
 export interface CreateUserState {
@@ -130,17 +131,19 @@ export async function createUserAction(
   const appUrl = env().NEXT_PUBLIC_APP_URL;
   await sendMail({
     to: email,
-    subject: "Your Homeo Trust account",
+    subject: `Your ${APP_NAME_SHORT} account`,
     text: [
       `Hello ${input.name},`,
       "",
-      "An account has been created for you on Homeo Trust.",
+      `An account has been created for you on ${APP_NAME}.`,
       "",
       `  Sign in:   ${appUrl}/login`,
       `  Username:  ${input.username}`,
       `  Temporary password: ${tempPassword}`,
       "",
       "You will be required to set a new password on first login.",
+      "",
+      `— ${APP_NAME}`,
     ].join("\n"),
   });
 

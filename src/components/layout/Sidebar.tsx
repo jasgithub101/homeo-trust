@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { APP_NAME } from "@/lib/branding";
 import type { AppShellUser } from "./AppShell";
 
 const CLINICAL_ITEMS = [{ label: "Dashboard", href: "/dashboard", icon: "⊞" }];
@@ -17,7 +18,7 @@ export function Sidebar({ user }: { user: AppShellUser }) {
     <aside className="flex w-60 flex-shrink-0 flex-col bg-slate-900 text-slate-100">
       <div className="border-b border-slate-700 px-5 py-5">
         <span className="text-base font-semibold tracking-tight text-white">
-          Homeo Trust
+          {APP_NAME}
         </span>
         <p className="mt-0.5 text-xs text-slate-400">Clinical System</p>
       </div>

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
+import { APP_NAME } from "@/lib/branding";
 import { LoginForm } from "./LoginForm";
 
 export default async function LoginPage({
@@ -19,7 +20,7 @@ export default async function LoginPage({
     <main className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
       <div className="w-full max-w-sm space-y-6 rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
         <div className="space-y-1 text-center">
-          <h1 className="text-xl font-semibold text-slate-900">Homeo Trust</h1>
+          <h1 className="text-xl font-semibold text-slate-900">{APP_NAME}</h1>
           <p className="text-sm text-slate-500">Sign in to continue</p>
         </div>
         <LoginForm next={next} />
