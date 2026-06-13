@@ -1,5 +1,14 @@
 # Homeo Trust — Interview Prep Guide
 
+> ⚠️ **SUPERSEDED — read `docs/PROJECT_WALKTHROUGH.md` instead.** That doc is the
+> single end-to-end home and is current as of dev HEAD. This Q&A predates the
+> Explore refactor and Phase 10b: §2 here still describes the **old materialized
+> `ExploreCaseIndex` table** and **"de-identify on write"** projection, which were
+> replaced by the live `explore_case_view` (and the free-text columns were later
+> removed). The Q&A *phrasing/voice* (the 30-second pitch, the orthogonal-authz and
+> data-modeling answers) is still useful, but trust `PROJECT_WALKTHROUGH.md`,
+> `AI_PRIVACY_MODEL.md`, and `SECURITY_MODEL.md` for anything Explore/privacy.
+
 A privacy-sensitive clinical management system for a homeopathy practice. Built in
 phases: auth → dynamic roles/permissions → clinical schema → patient management →
 authorization refinement → clinical workflow → attachments → de-identified Explore.
