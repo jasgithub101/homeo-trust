@@ -58,6 +58,12 @@ export const AUDIT_ACTIONS = {
   // Phase 8 — de-identified Explore. Metadata is PII-SAFE ONLY: filters as
   // enums/bands/coarse location, resultCount, and a suppressed flag. NEVER log
   // result patient ids, anonymous case codes, names, or any free text.
+  // Feature A1 — appointments. Metadata = appointmentId + type + status ONLY.
+  // NEVER log notes (free text, PII-capable) or the exact scheduledAt.
+  APPOINTMENT_CREATED: "appointment_created",
+  APPOINTMENT_UPDATED: "appointment_updated",
+  APPOINTMENT_STATUS_CHANGED: "appointment_status_changed",
+  APPOINTMENT_DELETED: "appointment_deleted",
   EXPLORE_SEARCHED: "explore_searched",
   // Retained but NO LONGER EMITTED: the Explore view refactor removed the index
   // refresh action. Kept so historical audit rows with this action stay labeled.

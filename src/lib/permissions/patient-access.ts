@@ -225,6 +225,17 @@ export const canViewSensitiveAttachment = (u: CurrentUser, p: string) =>
 export const canDeleteAttachment = (u: CurrentUser, p: string) =>
   permittedAndRelated(u, p, "attachment.delete");
 
+// --- Appointments (Feature A1) ---
+// Permission AND patient breadth scope, admin bypass — same as the clinical
+// sections. The notes field is additionally depth-gated at render time via
+// canViewSensitivePatient (free text may carry PII).
+export const canViewAppointments = (u: CurrentUser, p: string) =>
+  permittedAndRelated(u, p, "appointment.view");
+export const canCreateAppointment = (u: CurrentUser, p: string) =>
+  permittedAndRelated(u, p, "appointment.create");
+export const canManageAppointment = (u: CurrentUser, p: string) =>
+  permittedAndRelated(u, p, "appointment.manage");
+
 /**
  * Prisma `where` filter scoping the patient list (BREADTH):
  * - admin OR `patient.viewAll` → all patients (no DoctorProfile required)

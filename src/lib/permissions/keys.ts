@@ -77,6 +77,12 @@ export const PERMISSIONS = [
   { key: "attachment.viewSensitive", label: "View sensitive attachment", description: "Download files marked sensitive (depth). Does not grant breadth.", category: "Attachments" },
   { key: "attachment.delete", label: "Delete attachment", description: "Archive (soft-delete) attachments.", category: "Attachments" },
 
+  // Appointments (Feature A1) — access is permission AND patient-in-scope
+  // (admin bypass), like the clinical sections.
+  { key: "appointment.view", label: "View appointments", description: "View a patient's appointments.", category: "Appointment" },
+  { key: "appointment.create", label: "Create appointment", description: "Schedule appointments for a patient.", category: "Appointment" },
+  { key: "appointment.manage", label: "Manage appointments", description: "Reschedule/edit, change status, and archive appointments.", category: "Appointment" },
+
   // Explore
   { key: "explore.view", label: "View Explore", description: "Access the de-identified Explore page.", category: "Explore" },
   { key: "explore.filter", label: "Filter Explore", description: "Filter de-identified Explore records.", category: "Explore" },

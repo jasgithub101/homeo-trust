@@ -251,6 +251,7 @@ model Patient {
   doctorRelationships DoctorPatientRelationship[]
   treatmentEntries    TreatmentEntry[]
   attachments         PatientAttachment[]
+  appointments        Appointment[]
 
   @@index([createdAt])
 }
@@ -444,6 +445,53 @@ model PatientAttachment {
   @@index([patientIssueId])
   @@index([caseRecordId])
   @@index([treatmentEntryId])
+  @@index([deletedAt])
+}
+
+enum AppointmentType {
+  FOLLOW_UP
+  CONSULT
+  INITIAL
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+// Patient-level scheduling (Feature A1). No doctorProfileId in v1 — visibility
+// and scope are derived from the patient's relationships, never an ownership
+// column. `status` is the clinical outcome; the soft-delete trio handles
+// "created in error" (lists filter `deletedAt: null`; nothing hard-deleted).
+// `notes` is free text (PII-capable) → rendered only to sensitive-depth viewers.
+// `treatmentEntryId` is a plain nullable provenance id (no FK; TreatmentEntry is
+// never hard-deleted, so it cannot dangle) reserved for the A1.5 follow-up
+// supersede. Appointments are operational and are NEVER part of Explore/AI.
+model Appointment {
+  id               String            @id @default(cuid())
+  patientId        String
+  scheduledAt      DateTime
+  durationMinutes  Int?
+  allDay           Boolean           @default(false)
+  type             AppointmentType
+  status           AppointmentStatus @default(SCHEDULED)
+  notes            String?
+  treatmentEntryId String?
+  createdByUserId  String?
+
+  deletedAt       DateTime?
+  deletedByUserId String?
+  deletionReason  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, scheduledAt])
+  @@index([status])
   @@index([deletedAt])
 }
 

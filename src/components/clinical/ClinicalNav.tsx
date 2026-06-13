@@ -10,6 +10,7 @@ type Tab =
   | "case"
   | "issues"
   | "treatments"
+  | "appointments"
   | "attachments"
   | "timeline";
 
@@ -18,6 +19,7 @@ const TABS: { key: Tab; label: string; sub: string }[] = [
   { key: "case", label: "Case", sub: "/case" },
   { key: "issues", label: "Issues", sub: "/issues" },
   { key: "treatments", label: "Treatments", sub: "/treatments" },
+  { key: "appointments", label: "Appointments", sub: "/appointments" },
   { key: "attachments", label: "Attachments", sub: "/attachments" },
   { key: "timeline", label: "Timeline", sub: "/timeline" },
 ];
