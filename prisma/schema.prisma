@@ -454,7 +454,13 @@ model PatientAttachment {
 // patient or case id. Always fresh (no materialization, no rebuild, no
 // staleness). The view itself does NOT suppress small cohorts — the N=5
 // k-anonymity backstop is enforced in the app query layer (see
-// src/lib/explore/query.ts), as is the city-cohort coarsening threshold.
+// src/lib/explore/query.ts); city-cohort coarsening (cohort >= 5) lives in the
+// view DDL. Phase 10b removed the clinical FREE-TEXT summaries (issue title,
+// symptomName, medicineName, potency) from this view: they could carry typed
+// PII that cohort suppression does not mitigate. The view now carries NO
+// clinical free text. (state/country remain coarse demographic free text —
+// Residual 1b.) Re-adding clinical summaries requires a curated vocabulary
+// (Residual 1 option a), never a raw free-text column.
 //
 // `rowId` is a SYNTHETIC positional row number (row_number(), recomputed every
 // query). It exists ONLY to satisfy Prisma's view-model identifier requirement.
@@ -469,12 +475,8 @@ view ExploreCaseView {
   state                   String?
   country                 String?
   caseMonth               String?
-  issueSummaries          String[]
-  symptomSummaries        String[]
-  medicineSummaries       String[]
   issueStatuses           IssueStatus[]
   treatmentTypes          TreatmentEntryType[]
-  potencies               String[]
   patientConditionSummary String?
   improvementTrend        String?
 

@@ -7,7 +7,8 @@ import type { ExploreResult, ExploreRow } from "@/lib/explore/query";
  * than EXPLORE_MIN_COHORT, including zero) it shows ONLY a "broaden filters"
  * message — never any row and never the count, so a small cohort cannot be
  * re-identified or even sized. Every value shown here comes straight from the
- * de-identified index allow-list; there is no PII to render.
+ * de-identified view allow-list; there is no PII to render. (Phase 10b removed
+ * the free-text Issues/Symptoms/Medicines columns — see the view migration.)
  */
 export function ExploreResults({ result }: { result: ExploreResult }) {
   if (result.status === "suppressed") {
@@ -35,9 +36,6 @@ export function ExploreResults({ result }: { result: ExploreResult }) {
               <th className="px-4 py-3 font-medium">Gender</th>
               <th className="px-4 py-3 font-medium">Location</th>
               <th className="px-4 py-3 font-medium">Month</th>
-              <th className="px-4 py-3 font-medium">Issues</th>
-              <th className="px-4 py-3 font-medium">Symptoms</th>
-              <th className="px-4 py-3 font-medium">Medicines</th>
               <th className="px-4 py-3 font-medium">Trend</th>
             </tr>
           </thead>
@@ -53,15 +51,6 @@ export function ExploreResults({ result }: { result: ExploreResult }) {
                 </td>
                 <td className="px-4 py-3 text-slate-600">{formatLocation(row)}</td>
                 <td className="px-4 py-3 text-slate-600">{row.caseMonth ?? "—"}</td>
-                <td className="px-4 py-3 text-slate-600">
-                  {formatList(row.issueSummaries)}
-                </td>
-                <td className="px-4 py-3 text-slate-600">
-                  {formatList(row.symptomSummaries)}
-                </td>
-                <td className="px-4 py-3 text-slate-600">
-                  {formatList(row.medicineSummaries)}
-                </td>
                 <td className="px-4 py-3 text-slate-600">
                   {row.improvementTrend ? prettyEnum(row.improvementTrend) : "—"}
                 </td>
@@ -80,8 +69,4 @@ function formatLocation(row: ExploreRow): string {
     (p): p is string => Boolean(p),
   );
   return parts.length > 0 ? parts.join(", ") : "—";
-}
-
-function formatList(values: string[]): string {
-  return values.length > 0 ? values.join(", ") : "—";
 }

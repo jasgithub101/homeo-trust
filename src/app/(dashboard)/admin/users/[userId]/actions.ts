@@ -9,6 +9,11 @@ import {
   getAdminRole,
   checkNotRemovingLastAdmin,
 } from "@/lib/permissions/admin-guard";
+import {
+  getEffectivePermissions,
+  actorOutranks,
+  actorHoldsAll,
+} from "@/lib/permissions/privilege-tier";
 import { writeAuditLog, AUDIT_ACTIONS } from "@/lib/audit/log";
 import { setUserRolesSchema } from "@/lib/validation/role";
 
@@ -43,6 +48,34 @@ export async function setUserRolesAction(
     const found = await db.role.count({ where: { id: { in: nextRoleIds } } });
     if (found !== nextRoleIds.length) {
       return { error: "One or more selected roles no longer exist." };
+    }
+  }
+
+  // Privilege-tier guard (Phase 10b, Residual 2): role assignment must not be an
+  // escalation vector. For a non-admin actor: (i) every permission in the
+  // RESULTING role set must be one the actor already holds (you cannot grant a
+  // permission you lack); and (ii) the actor must outrank-or-equal the target's
+  // CURRENT effective permissions (you cannot modify a user more powerful than
+  // you). Admins bypass. This layers on top of the ADMIN-role and last-admin
+  // guards below.
+  if (!actor.isAdmin) {
+    const resultingRoles = await db.role.findMany({
+      where: { id: { in: nextRoleIds } },
+      select: {
+        rolePermissions: { select: { permission: { select: { key: true } } } },
+      },
+    });
+    const resultingKeys = new Set(
+      resultingRoles.flatMap((r) =>
+        r.rolePermissions.map((rp) => rp.permission.key),
+      ),
+    );
+    if (!actorHoldsAll(actor, resultingKeys)) {
+      return { error: "You cannot grant permissions you do not hold yourself." };
+    }
+    const targetCurrent = await getEffectivePermissions(userId);
+    if (!actorOutranks(actor, targetCurrent)) {
+      return { error: "You cannot modify a user whose access exceeds your own." };
     }
   }
 
@@ -92,7 +125,8 @@ export async function setUserRolesAction(
     actorUserId: actor.id,
     entityType: "User",
     entityId: userId,
-    metadata: { added: toAdd, removed: toRemove },
+    // ids/enums only. actorOutranksTarget records the tier guard was satisfied.
+    metadata: { added: toAdd, removed: toRemove, actorOutranksTarget: true },
   });
 
   revalidatePath(`/admin/users/${userId}`);
@@ -117,11 +151,13 @@ export interface ResetPasswordState {
  * - gated on `user.update`;
  * - self-reset is refused (use Change password instead);
  * - resetting a user who holds ADMIN additionally requires the actor to be an
- *   admin — a reset hands the actor a credential that authenticates AS the
- *   target, so it must not be a privilege-escalation path. NOTE: the user-detail
- *   page is admin-only today, so only admins reach this action; if that page is
- *   ever opened to non-admin `user.update` holders, this guard must be
- *   strengthened (e.g. refuse to reset any user whose privileges exceed yours).
+ *   admin (explicit, for a clear message); AND
+ * - privilege-tier guard (Phase 10b): refuse unless the actor outranks-or-equals
+ *   the target — the target's effective permissions must be a subset of the
+ *   actor's. A reset hands the actor a credential that authenticates AS the
+ *   target, so it must never be a privilege-escalation path. This holds even if
+ *   the user-detail page is later opened to non-admin `user.update` holders,
+ *   since the action authorizes itself rather than relying on the page guard.
  */
 export async function resetUserPasswordAction(
   _prev: ResetPasswordState,
@@ -149,6 +185,17 @@ export async function resetUserPasswordAction(
     return { error: "Only an administrator can reset an administrator's password." };
   }
 
+  // Privilege-tier guard (Phase 10b, Residual 2): a reset hands the actor a
+  // credential that authenticates AS the target. Beyond the ADMIN special-case
+  // above, refuse unless the actor outranks-or-equals the target (the target's
+  // effective permissions are a subset of the actor's). Admins bypass. This is
+  // the action's own authorization — it does NOT rely on the page being
+  // admin-only, since server actions are independently invokable.
+  const targetPerms = await getEffectivePermissions(userId);
+  if (!actorOutranks(actor, targetPerms)) {
+    return { error: "You cannot reset a user whose access exceeds your own." };
+  }
+
   // Generate + hash the temp password. The plaintext is returned to the caller
   // for one-time display and never stored or logged.
   const tempPassword = generateTempPassword();
@@ -166,8 +213,9 @@ export async function resetUserPasswordAction(
     actorUserId: actor.id,
     entityType: "User",
     entityId: userId,
-    // ids only — never the temp password or a hash.
-    metadata: { targetIsAdmin },
+    // ids/enums only — never the temp password or a hash. actorOutranksTarget
+    // records that the tier guard was satisfied.
+    metadata: { targetIsAdmin, actorOutranksTarget: true },
   });
 
   revalidatePath(`/admin/users/${userId}`);

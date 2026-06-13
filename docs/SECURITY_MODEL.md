@@ -80,15 +80,16 @@ Three flows share the temp-password + `mustChangePassword` machinery; there is
   - permission **`user.update`** (no new key);
   - **self-reset is refused** (use self change-password);
   - resetting a user who holds **ADMIN additionally requires the actor to be an
-    admin**, because a reset hands the actor a credential that authenticates AS
-    the target — it must not be a privilege-escalation path.
-  - **Residual (documented):** the ADMIN guard closes the worst case, but a
-    non-admin `user.update` holder could still reset a *more-privileged
-    non-admin* and impersonate them. This is **moot today because the
-    user-detail page is admin-only**, so only admins reach the action. **If that
-    page is ever opened to non-admin `user.update` holders, this reopens** and a
-    stronger guard is required (e.g. refuse to reset any user whose privileges
-    exceed the actor's, or a dedicated reset capability).
+    admin** (explicit, for a clear message);
+  - **privilege-tier guard (Phase 10b):** the reset is refused unless the actor
+    **outranks-or-equals** the target — the target's effective permission set
+    must be a **subset** of the actor's (admins bypass; they hold all). A reset
+    hands the actor a credential that authenticates AS the target, so it must
+    never be an escalation path. This guard lives in the **action itself**
+    (`actorOutranks` in `src/lib/permissions/privilege-tier.ts`), not in the
+    page, so it holds even if the user-detail page is later opened to non-admin
+    `user.update` holders. **Lateral-tier** resets (target perms == actor perms)
+    are permitted by design (helpdesk/co-admin model).
 - **Forgot-password (logged out)**: a **static** page that says to contact an
   administrator. It takes no identifier and never confirms whether an account
   exists, so it **cannot be used for user enumeration**.
@@ -116,6 +117,23 @@ Initial permission keys may include the following (grouped by category):
 - `role.update`
 - `role.delete`
 - `permission.assign`
+
+**Privilege-tier guard (Phase 10b, Residual 2).** Role assignment
+(`setUserRolesAction`, gated on `user.assignRole`) and password reset
+(`resetUserPasswordAction`, gated on `user.update`) are both potential
+escalation vectors, so each applies a subset/outrank check in
+`src/lib/permissions/privilege-tier.ts` (on top of the existing ADMIN-role and
+last-admin guards). For a non-admin actor:
+- **Role assignment:** (i) every permission in the **resulting** role set must
+  be one the actor already holds (you cannot grant a permission you lack), and
+  (ii) the actor must outrank-or-equal the target's **current** effective
+  permissions (you cannot modify a user more powerful than you).
+- **Password reset:** the target's effective permissions must be a subset of the
+  actor's (you cannot reset — and thereby impersonate — a more-privileged user).
+
+Admins bypass (they hold all). Lateral-tier actions (equal permission sets) are
+permitted by design. Audit metadata records a PII-free `actorOutranksTarget`
+boolean alongside ids/enums.
 
 ### Patient
 
@@ -208,6 +226,16 @@ URL, and never via Explore/AI.
 > so the "query only the view" discipline (enforced by the allow-list select in
 > `src/lib/explore/query.ts`) is load-bearing. In exchange, the view is always
 > fresh: there is no projection, rebuild, refresh action, or staleness window.
+>
+> **Phase 10b (Residual 1):** the view's clinical FREE-TEXT summaries
+> (`issueSummaries`/`symptomSummaries`/`medicineSummaries`/`potencies`, sourced
+> from `issue.title`/`symptomName`/`medicineName`/`potency`) were **removed** —
+> they could carry typed PII that N=5 cohort suppression does not mitigate. The
+> view now carries **no clinical free text** (correct-by-definition). Precisely:
+> "no *clinical* free text" — `state`/`country` remain coarse demographic
+> free-text columns (Residual 1b, deferred). Re-adding clinical summaries must
+> use a curated vocabulary (Residual 1 option a), never a raw column. See
+> `AI_PRIVACY_MODEL.md §3.2`.
 
 - `explore.view` — **the single Explore gate (Phase 8).** Access is binary:
   `admin || explore.view`. It gates both the page (`notFound()` otherwise) and

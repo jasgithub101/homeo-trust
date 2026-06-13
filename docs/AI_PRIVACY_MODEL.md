@@ -167,20 +167,35 @@ Rules:
   issues/symptoms/treatments and patients without a `CaseRecord` are excluded by
   the view definition.
 
-### 3.2 RESIDUAL PII-LEAK PATH — free text in structured fields (D5) ⚠️
+### 3.2 Clinical free-text leak — CLOSED in Phase 10b ✅
 
-Summaries are sourced **only** from short structured fields — `PatientIssue.title`,
-`PatientSymptom.symptomName`, `TreatmentEntry.medicineName` — and **never** from
-`description`/`notes`/`instructions`/`followUpNotes`/`caseDescription`. They are
-normalized (trim/collapse/dedupe/length-cap).
+**History (the residual):** the view's summaries were once sourced from the
+unconstrained free-text clinical fields `PatientIssue.title`,
+`PatientSymptom.symptomName`, `TreatmentEntry.medicineName` and
+`TreatmentEntry.potency`. A user can type raw PII into those fields (e.g. a
+patient name as an issue title), and k-anonymity / N=5 cohort suppression
+mitigates row **counts**, not cell **content** — so those summaries could surface
+PII verbatim in Explore and in any future AI on the same view.
 
-**However, k-anonymity does NOT mitigate PII that a user types into these short
-fields** (e.g. a patient name entered as an issue title). This is the one
-residual PII-leak path into Explore — and, because **Phase 9 (AI) must consume
-this same view** (`explore_case_view`, never the base PII tables), into AI as
-well. The future fix is a controlled vocabulary or a
-server-side PII scrub on projection; it is **NOT built yet**. Until then, operator
-training and field hygiene are the only controls on these fields.
+**Fix (Phase 10b, Residual 1 option b):** the four free-text-sourced columns
+(`issueSummaries`, `symptomSummaries`, `medicineSummaries`, `potencies`) were
+removed from `explore_case_view`, and the CTEs/column reads that produced them
+were removed from the view definition, so the view no longer references any
+clinical free-text column at all. **The view now carries NO clinical free
+text** — this is correct-by-definition, not dependent on doctors avoiding PII.
+(See migration `20260612030000_explore_view_drop_freetext_summaries`.)
+
+**Precise scope of the claim:** "no *clinical* free text" — NOT "no free text".
+`state`/`country` remain coarse free-text **demographic** columns in the view
+(`city` is cohort-suppressed). Tightening those is tracked as **Residual 1b**
+(vocabularize or coarsen location to region codes), out of scope for 10b.
+
+**Planned follow-on — Residual 1 option (a) (a feature phase, NOT a security
+residual):** re-introduce curated clinical summaries via a **controlled
+vocabulary** (lookup tables; the view reads only curated term names, with a
+curation/approval gate so unapproved terms never reach Explore). Re-adding
+clinical summaries MUST go through that curated path — **never a raw free-text
+column**.
 
 ---
 

@@ -44,12 +44,8 @@ const exploreViewSelect = {
   state: true,
   country: true,
   caseMonth: true,
-  issueSummaries: true,
-  symptomSummaries: true,
-  medicineSummaries: true,
   issueStatuses: true,
   treatmentTypes: true,
-  potencies: true,
   patientConditionSummary: true,
   improvementTrend: true,
 } satisfies Prisma.ExploreCaseViewSelect;
