@@ -1,0 +1,281 @@
+========================================================================
+ Homeo Trust — Setup Guide (Windows)
+========================================================================
+
+A friendly, step-by-step guide. You do not need to be technical. If a
+step mentions a file or folder, it is inside the folder you unzipped.
+
+Tip: keep this file open in Notepad while you set things up.
+
+
+------------------------------------------------------------------------
+ 1. WHAT THIS IS
+------------------------------------------------------------------------
+
+Homeo Trust is a private clinic application that runs on YOUR OWN Windows
+computer. It is meant for a single clinic.
+
+  * Your patient records stay under your control.
+  * The app is reachable only from this computer (web address
+    http://127.0.0.1:8787) — not from other devices on your Wi-Fi.
+  * There is nothing to install in the usual sense and no admin rights
+    are needed — everything is inside the folder you unzipped.
+
+You only have to make ONE decision before you start: where your data
+lives. That is Step 0, next.
+
+
+------------------------------------------------------------------------
+ 2. STEP 0 — PICK YOUR DATABASE  (read this first)
+------------------------------------------------------------------------
+
+Your patient records are kept in a "database". You have two choices.
+Pick ONE. (You can change later, but it means starting fresh, so choose
+now.)
+
+  +------------------------------------------------------------------+
+  |  OPTION A — LOCAL   (recommended; the default for most people)   |
+  |                                                                  |
+  |  * Everything stays ON THIS PC. Works with NO internet.          |
+  |  * Most private: patient data never leaves your computer.        |
+  |  * Uses more disk space and memory (a database runs on this PC). |
+  |  ->  Download/use the FULL package (it contains a postgres\      |
+  |      folder). Follow TRACK A below.                              |
+  +------------------------------------------------------------------+
+
+  +------------------------------------------------------------------+
+  |  OPTION B — NEONDB  (for low-spec laptops: ~4 GB RAM / low disk) |
+  |                                                                  |
+  |  * The database lives in the cloud (a free Neon account), so     |
+  |    this PC stays light — no local database engine.               |
+  |  * Needs INTERNET whenever you use the app.                      |
+  |  * Patient data is stored on a third-party cloud (Neon's         |
+  |    servers), not only on this PC. Choose this only if that is    |
+  |    acceptable for your data.                                     |
+  |  ->  Download/use the LITE package (no postgres\ folder).        |
+  |      Follow TRACK B below.                                       |
+  +------------------------------------------------------------------+
+
+Not sure? Choose Option A (Local).
+
+
+========================================================================
+ 3. TRACK A — LOCAL SETUP   (full package)
+========================================================================
+
+This is basically two double-clicks.
+
+ 1. Unzip the FULL package somewhere simple, for example:
+        C:\HomeoTrust
+    (Avoid OneDrive/Desktop sync folders and "Program Files".)
+
+ 2. Double-click  setup.bat
+    It prepares everything and prints a box like this:
+
+        Database:      local (bundled, on this PC)
+        Open:          http://127.0.0.1:8787
+        Username:      admin
+        Temp password: <a long random password>
+
+    >>> WRITE DOWN the Username and the Temp password. The temporary
+        password is shown only ONCE. <<<
+
+ 3. Double-click  start.bat
+    Your web browser opens at http://127.0.0.1:8787.
+
+ 4. Log in with username "admin" and the temporary password. You will be
+    asked to set your own new password right away (see section 5).
+
+ To use the app another day: just double-click start.bat.
+ To stop the app: close the start.bat window.
+
+ That's it — skip to section 5 (First login) and section 6 (Looking
+ after your data).
+
+
+========================================================================
+ 4. TRACK B — NEONDB SETUP   (lite package)
+========================================================================
+
+This one needs a little more setup the first time because you create a
+free cloud database and paste two connection links. Go slowly; each step
+is small.
+
+ ---- 4.1  Create a free Neon database ----
+
+ 1. In your web browser, go to neon.com and sign up for a FREE account.
+ 2. Create a new Project (any name, e.g. "homeo-trust"). Neon makes one
+    database for you automatically. The FREE tier is enough to start.
+
+ ---- 4.2  Copy your TWO connection links ----
+
+ Neon gives you a "connection string" (a long line that starts with
+ postgresql://...). You actually need TWO versions of it:
+
+    POOLED link  — the host part contains the word "-pooler"
+                   ->  this goes into DATABASE_URL
+    DIRECT link  — the host part does NOT contain "-pooler"
+                   ->  this goes into DIRECT_URL
+
+ In the Neon dashboard, look for the connection details for your
+ database. There is usually a toggle or dropdown such as "Pooled
+ connection" / "Direct connection" — copy each one.
+
+ IMPORTANT: make sure BOTH links end with   ?sslmode=require
+ (Neon requires a secure connection). If a link does not have it, add it
+ to the end yourself.
+
+ They will look roughly like this (yours will be different — do NOT copy
+ these example lines):
+
+    Pooled:  postgresql://USER:PASS@ep-xxxx-pooler.REGION.aws.neon.tech/DBNAME?sslmode=require
+    Direct:  postgresql://USER:PASS@ep-xxxx.REGION.aws.neon.tech/DBNAME?sslmode=require
+
+ Why two? The app uses the POOLED link while you work (it shares
+ connections efficiently). The DIRECT link is used only to set up and
+ upgrade the database. Putting each in the right place keeps the free
+ Neon connection limit happy.
+
+ ---- 4.3  Put the links into your settings file ----
+
+ 1. Unzip the LITE package somewhere simple (e.g. C:\HomeoTrust).
+ 2. Find the file  .env.example  in that folder. Make a COPY of it and
+    rename the copy to exactly  .env  (no name before the dot).
+       - If Windows hides file extensions, the file is just ".env".
+       - Tip: you can also run setup.bat once now; it will create the
+         .env file for you and then stop with a message telling you to
+         edit it.
+ 3. Open  .env  in Notepad. Find these two lines:
+        DATABASE_URL="..."
+        DIRECT_URL="..."
+    Replace the part inside the quotes:
+        DATABASE_URL  =  your POOLED link
+        DIRECT_URL    =  your DIRECT link
+    Save the file and close Notepad. Leave every other line as it is.
+
+ ---- 4.4  Finish setup ----
+
+ 4. Double-click  setup.bat
+    It keeps your two links, fills in the rest, connects to your Neon
+    database, and prints:
+
+        Database:      remote (your external database)
+        Open:          http://127.0.0.1:8787
+        Username:      admin
+        Temp password: <a long random password>
+
+    >>> WRITE DOWN the Username and the Temp password (shown once). <<<
+
+ 5. Double-click  start.bat, then log in as "admin" and set your new
+    password (section 5). You must be online whenever you use the app.
+
+ ---- 4.5  Good-to-know for NeonDB ----
+
+  * INTERNET REQUIRED: the app will not work offline in this mode.
+  * "WAKE-UP" PAUSE: a free Neon database goes to sleep when unused. The
+    very first page after a break can take several seconds while it wakes
+    up — if it seems slow, wait a moment and refresh.
+  * FREE STORAGE LIMIT: the free plan has a storage cap. Patient records
+    are small, but if you ever fill it the app will show database errors
+    when saving — upgrade your Neon plan or free up space.
+  * ATTACHMENTS STILL USE THIS PC'S DISK: uploaded files (reports,
+    photos) are NOT sent to Neon. They are saved on THIS computer (in the
+    data\attachments folder) and keep adding up over time. So NeonDB does
+    NOT save local disk space for attachments — on a low-disk laptop,
+    keep an eye on free space and back up data\attachments. (Storing
+    attachments in the cloud is a possible FUTURE option; today they are
+    always local.)
+  * WHERE YOUR DATA IS: your patient records live on Neon's servers (the
+    cloud); your uploaded files live on this PC. Back up both (your Neon
+    project, and this PC's data\ folder).
+
+
+========================================================================
+ 5. FIRST LOGIN  (both options)
+========================================================================
+
+ 1. Open http://127.0.0.1:8787 (start.bat opens it for you).
+ 2. Username: admin   Password: the temporary password you wrote down.
+ 3. The app will immediately ask you to set a NEW password. Choose a
+    strong one and keep it safe — this becomes your real admin login.
+
+ The temporary password only works for that first sign-in.
+
+
+========================================================================
+ 6. LOOKING AFTER YOUR DATA  (both options)
+========================================================================
+
+ WHERE YOUR DATA LIVES
+   * .env                 - your settings + security key (and, for Local,
+                            your database password; for NeonDB, your two
+                            connection links). KEEP THIS PRIVATE.
+   * data\attachments     - your uploaded files (both options).
+   * data\pgdata          - your patient database (LOCAL option only;
+                            NeonDB keeps the database in the cloud).
+
+ BACK UP  (do this monthly, with the app closed)
+   1. Close the app (close the start.bat window).
+   2. Copy the whole  data\  folder AND the  .env  file somewhere safe
+      (e.g. a USB stick). Never email .env or put it in a shared folder.
+   - Local option: that is a complete backup.
+   - NeonDB option: that backs up your files + settings; your patient
+     database is held (and versioned) by Neon.
+
+ UPDATE TO A NEW VERSION
+   1. Close the app (close the start.bat window).
+   2. Unzip the NEW package somewhere (use the SAME type you already
+      have — full stays full, lite stays lite).
+   3. In your CURRENT folder, double-click  update.bat  and, when asked,
+      point it at the newly unzipped folder.
+   4. Double-click start.bat.
+   Your settings (.env), your database, and your uploaded files are all
+   kept. Only the app itself is replaced.
+
+ IF YOU LOSE YOUR .env FILE (or the app can't reach its database)
+   * Local option: double-click  repair.bat  and type YES. It rebuilds
+     the security key and database password against your existing data —
+     nothing is deleted. Everyone is signed out and must log in again;
+     your admin login still works. Then run start.bat.
+   * NeonDB option: re-create .env (copy .env.example to .env and paste
+     your two Neon links from the Neon dashboard again), then run
+     setup.bat. A new security key signs everyone out; your admin login
+     still works.
+
+
+========================================================================
+ 7. TROUBLESHOOTING
+========================================================================
+
+ "Windows protected your PC" (SmartScreen) or antivirus blocks setup.bat:
+   * Click "More info", then "Run anyway".
+   * Or, BEFORE unzipping: right-click the downloaded .zip -> Properties
+     -> tick "Unblock" -> OK, then unzip. (You can also right-click an
+     individual .bat -> Properties -> Unblock.)
+   These files are unsigned; this warning is normal for in-house software.
+
+ "Port already in use" / app won't open when you run start.bat:
+   * Homeo Trust is probably already running in another window. Use that
+     window, or close it and run start.bat again.
+   * The app uses address http://127.0.0.1:8787 — only one copy at a time.
+
+ The browser shows "can't connect" right after start.bat:
+   * Wait a few seconds and refresh; the app takes a moment to start.
+   * NeonDB: the first request after a break can be slow while the cloud
+     database wakes up — wait and refresh.
+   * Make sure the start.bat window is still open.
+
+ NeonDB: "can't connect to the database":
+   * Check you are online.
+   * Open .env and confirm DATABASE_URL is your POOLED link and
+     DIRECT_URL is your DIRECT link, and that BOTH end with
+     ?sslmode=require.
+
+ Forgot your admin password (and didn't keep the temporary one):
+   * If you have a second administrator, they can reset it from inside
+     the app (Admin -> Users). If you are the only admin, contact support.
+
+
+========================================================================
+ Need a one-line reminder of the basics? See README.txt.
+========================================================================

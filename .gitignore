@@ -21,3 +21,8 @@ graphify-out/
 
 # local attachment blob store (LocalDiskStorage) — never commit uploaded files
 var/
+
+# Windows packaging output (never commit the zip or bundled binaries)
+*.zip
+/packaging/windows/dist/
+/vendor/

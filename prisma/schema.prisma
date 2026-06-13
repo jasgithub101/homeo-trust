@@ -1,6 +1,10 @@
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["views"]
+  // "windows" so the Windows self-host package carries the Windows query/schema
+  // engine for `prisma migrate deploy` + generated client (see packaging/windows
+  // and scripts/package-windows.mjs). "native" keeps local dev working.
+  binaryTargets   = ["native", "windows"]
 }
 
 datasource db {
