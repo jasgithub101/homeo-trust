@@ -48,28 +48,51 @@ export async function createPatientAction(
     return { fieldErrors: parsed.error.flatten().fieldErrors };
   }
   const input = parsed.data;
-  const initialDoctorProfileId = input.initialDoctorProfileId?.trim() || null;
+  const postedDoctorId = input.initialDoctorProfileId?.trim() || null;
+  const isAssigner =
+    actor.isAdmin || userHasPermission(actor, "patient.assignDoctor");
 
-  // Assigning an initial doctor requires assignDoctor permission (or admin) and
-  // an existing DoctorProfile (never a generic User / non-doctor).
-  if (initialDoctorProfileId) {
-    if (!(actor.isAdmin || userHasPermission(actor, "patient.assignDoctor"))) {
-      return {
-        fieldErrors: {
-          initialDoctorProfileId: [
-            "You do not have permission to assign a doctor.",
-          ],
-        },
-      };
+  // Resolve the single DoctorProfile (if any) that will drive the new patient's
+  // PRIMARY_TREATING relationship. Tri-state authorization:
+  //  1) Assigner (admin / patient.assignDoctor): honor the explicit picker (may
+  //     be null = "None", or another doctor). The form pre-selects self, but the
+  //     choice is theirs. The target DoctorProfile must exist.
+  //  2) Non-assigner WITH a DoctorProfile: SELF-CLAIM only. Any posted id (even a
+  //     forged other-doctor id) is IGNORED; we use only the server-side
+  //     actor.doctorProfileId. This closes the "doctor locked out of the patient
+  //     they just created" gap without granting the privileged ability to assign
+  //     *other* doctors.
+  //  3) Non-assigner WITHOUT a DoctorProfile (e.g. reception): never honor a
+  //     client-supplied doctor — reject a posted id; the patient is still created
+  //     with no relationship.
+  let assignedDoctorProfileId: string | null = null;
+
+  if (isAssigner) {
+    if (postedDoctorId) {
+      const doctor = await db.doctorProfile.findUnique({
+        where: { id: postedDoctorId },
+        select: { id: true },
+      });
+      if (!doctor) {
+        return { fieldErrors: { initialDoctorProfileId: ["Doctor not found."] } };
+      }
+      assignedDoctorProfileId = postedDoctorId;
     }
-    const doctor = await db.doctorProfile.findUnique({
-      where: { id: initialDoctorProfileId },
-      select: { id: true },
-    });
-    if (!doctor) {
-      return { fieldErrors: { initialDoctorProfileId: ["Doctor not found."] } };
-    }
+  } else if (actor.doctorProfileId) {
+    // Self-assignment only — posted id is deliberately ignored (tamper guard).
+    assignedDoctorProfileId = actor.doctorProfileId;
+  } else if (postedDoctorId) {
+    return {
+      fieldErrors: {
+        initialDoctorProfileId: [
+          "You do not have permission to assign a doctor.",
+        ],
+      },
+    };
   }
+
+  const selfAssigned =
+    !!actor.doctorProfileId && assignedDoctorProfileId === actor.doctorProfileId;
 
   const patientCode = await generateUniquePatientCode();
   const scalars = toPatientScalars(input);
@@ -80,10 +103,15 @@ export async function createPatientAction(
       data: {
         ...scalars,
         patientCode,
-        doctorRelationships: initialDoctorProfileId
+        // Exactly one (or none) PRIMARY_TREATING current relationship — explicit
+        // picker (assigner) or self-claim (non-assigner doctor), resolved above.
+        // Nested create = one implicit transaction: if this DPR insert fails, the
+        // patient insert rolls back. A brand-new patient has no other DPR rows, so
+        // the dpr_one_current_primary_per_patient partial unique index is safe.
+        doctorRelationships: assignedDoctorProfileId
           ? {
               create: {
-                doctorProfileId: initialDoctorProfileId,
+                doctorProfileId: assignedDoctorProfileId,
                 relationshipType: "PRIMARY_TREATING",
                 isCurrentlyTreating: true,
                 assignedByUserId: actor.id,
@@ -102,28 +130,34 @@ export async function createPatientAction(
     actorUserId: actor.id,
     entityType: "Patient",
     entityId: patient.id,
-    metadata: { assignedInitialDoctor: Boolean(initialDoctorProfileId) },
+    metadata: { assignedInitialDoctor: Boolean(assignedDoctorProfileId) },
   });
-  if (initialDoctorProfileId) {
+  if (assignedDoctorProfileId) {
     await writeAuditLog({
       action: AUDIT_ACTIONS.DPR_CREATED,
       actorUserId: actor.id,
       entityType: "Patient",
       entityId: patient.id,
+      // ids/enums only. selfAssigned distinguishes a doctor claiming their own
+      // new patient (no assignDoctor needed) from an assigner picking a doctor.
       metadata: {
-        doctorProfileId: initialDoctorProfileId,
+        doctorProfileId: assignedDoctorProfileId,
         relationshipType: "PRIMARY_TREATING",
         viaCreate: true,
+        selfAssigned,
       },
     });
   }
 
-  const assignedSelf =
-    !!actor.doctorProfileId && initialDoctorProfileId === actor.doctorProfileId;
-  const canView = actor.isAdmin || assignedSelf;
+  const canView = actor.isAdmin || selfAssigned;
 
   revalidatePath("/patients");
   return {
-    success: { patientId: patient.id, patientCode, canView, assignedSelf },
+    success: {
+      patientId: patient.id,
+      patientCode,
+      canView,
+      assignedSelf: selfAssigned,
+    },
   };
 }
