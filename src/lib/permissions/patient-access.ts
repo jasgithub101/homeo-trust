@@ -110,6 +110,44 @@ export async function canManagePatientDoctors(
   return isPatientInScope(user, patientId);
 }
 
+/**
+ * True if the user is THIS patient's CURRENT primary treating doctor
+ * (PRIMARY_TREATING + isCurrentlyTreating). Server-derived from
+ * DoctorPatientRelationship — never trust the client. Being the current primary
+ * inherently proves the patient is in scope.
+ */
+export async function isCurrentPrimaryTreatingDoctor(
+  user: CurrentUser,
+  patientId: string,
+): Promise<boolean> {
+  if (!user.doctorProfileId) return false;
+  const rel = await db.doctorPatientRelationship.findFirst({
+    where: {
+      patientId,
+      doctorProfileId: user.doctorProfileId,
+      relationshipType: "PRIMARY_TREATING",
+      isCurrentlyTreating: true,
+    },
+    select: { id: true },
+  });
+  return rel !== null;
+}
+
+/**
+ * May this user add a CONSULTING doctor to this patient?
+ * admin / `patient.assignDoctor` (+ scope) OR the patient's CURRENT primary
+ * treating doctor — the latter needs NO `assignDoctor` permission (mirrors the
+ * create-time self-assign: a relationship-derived capability, not a new key).
+ * Scoped to consulting only; it never lets a non-manager set/transfer a primary.
+ */
+export async function canAssignConsultingDoctor(
+  user: CurrentUser,
+  patientId: string,
+): Promise<boolean> {
+  if (await canManagePatientDoctors(user, patientId)) return true;
+  return isCurrentPrimaryTreatingDoctor(user, patientId);
+}
+
 /** Can the user open a patient's detail at all? Pure breadth gate. */
 export async function canViewPatient(
   user: CurrentUser,

@@ -132,7 +132,18 @@ export default async function PatientDetailPage({
   const hasCurrentPrimary = patient.doctorRelationships.some(
     (r) => r.isCurrentlyTreating && r.relationshipType === "PRIMARY_TREATING",
   );
-  const doctors = canManage ? await loadDoctorOptions() : [];
+  // UI hint only — the server action re-derives this authoritatively. A current
+  // primary treating doctor (even without patient.assignDoctor) may add
+  // consultants, so they also need the doctor picker.
+  const isPrimaryHere =
+    !!user.doctorProfileId &&
+    patient.doctorRelationships.some(
+      (r) =>
+        r.isCurrentlyTreating &&
+        r.relationshipType === "PRIMARY_TREATING" &&
+        r.doctorProfile.id === user.doctorProfileId,
+    );
+  const doctors = canManage || isPrimaryHere ? await loadDoctorOptions() : [];
 
   const dob =
     showSensitive && patient.dateOfBirth
@@ -235,6 +246,23 @@ export default async function PatientDetailPage({
                 </p>
               )}
             </div>
+          </div>
+        ) : isPrimaryHere ? (
+          // Primary treating doctor without patient.assignDoctor: may add
+          // consulting doctors to this patient only (no primary/transfer powers).
+          <div className="max-w-md rounded-lg border border-slate-200 bg-white p-5">
+            <h3 className="mb-1 text-sm font-semibold text-slate-900">
+              Add a consulting doctor
+            </h3>
+            <p className="mb-3 text-xs text-slate-500">
+              As this patient&apos;s primary treating doctor, you can bring in
+              consulting doctors. They gain access to this patient only.
+            </p>
+            <AssignDoctorForm
+              patientId={patient.id}
+              doctors={doctors}
+              lockType="CONSULTING"
+            />
           </div>
         ) : null}
       </section>

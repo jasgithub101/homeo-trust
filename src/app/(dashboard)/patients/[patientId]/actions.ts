@@ -7,6 +7,7 @@ import {
   canEditPatient,
   canManagePatientDoctors,
   canViewSensitivePatient,
+  isCurrentPrimaryTreatingDoctor,
 } from "@/lib/permissions/patient-access";
 import { writeAuditLog, AUDIT_ACTIONS } from "@/lib/audit/log";
 import { toPatientScalars } from "@/lib/patients/patient-data";
@@ -97,15 +98,41 @@ export async function assignDoctorAction(
   }
   const { patientId, doctorProfileId, relationshipType, notes } = parsed.data;
 
-  if (!(await canManagePatientDoctors(user, patientId))) {
-    return { error: "You do not have permission to manage this patient's doctors." };
+  // Authorization branches on relationship type (patientId comes from the route,
+  // and the primary check is server-derived — no client trust):
+  //  - CONSULTING: managers/admin OR the patient's CURRENT primary treating
+  //    doctor (the primary may add consultants without patient.assignDoctor).
+  //  - PRIMARY_TREATING / ASSISTING: managers/admin only (canManagePatientDoctors).
+  const isConsulting = relationshipType === "CONSULTING";
+  const isManager = await canManagePatientDoctors(user, patientId);
+  const allowed = isConsulting
+    ? isManager || (await isCurrentPrimaryTreatingDoctor(user, patientId))
+    : isManager;
+  if (!allowed) {
+    return {
+      error: isConsulting
+        ? "You do not have permission to add a consulting doctor to this patient."
+        : "You do not have permission to manage this patient's doctors.",
+    };
   }
+  // True only when reached via the primary-only path (for audit + self-guard).
+  const viaPrimaryDoctor = isConsulting && !isManager;
 
   const doctor = await db.doctorProfile.findUnique({
     where: { id: doctorProfileId },
     select: { id: true },
   });
   if (!doctor) return { fieldErrors: { doctorProfileId: ["Doctor not found."] } };
+
+  // A doctor cannot be assigned as their own consulting doctor (notably the
+  // primary self-consulting on the primary-only path).
+  if (isConsulting && doctorProfileId === user.doctorProfileId) {
+    return {
+      fieldErrors: {
+        doctorProfileId: ["A doctor cannot be added as their own consulting doctor."],
+      },
+    };
+  }
 
   // One current PRIMARY_TREATING doctor per patient — app check + DB backstop.
   if (relationshipType === "PRIMARY_TREATING") {
@@ -118,6 +145,22 @@ export async function assignDoctorAction(
         error:
           "This patient already has a current primary treating doctor. Use Transfer to change it.",
       };
+    }
+  }
+
+  // No duplicate active consulting relationship for the same (patient, doctor).
+  if (isConsulting) {
+    const dupConsult = await db.doctorPatientRelationship.findFirst({
+      where: {
+        patientId,
+        doctorProfileId,
+        relationshipType: "CONSULTING",
+        isCurrentlyTreating: true,
+      },
+      select: { id: true },
+    });
+    if (dupConsult) {
+      return { error: "This doctor is already a current consulting doctor for this patient." };
     }
   }
 
@@ -145,7 +188,9 @@ export async function assignDoctorAction(
     actorUserId: user.id,
     entityType: "Patient",
     entityId: patientId,
-    metadata: { doctorProfileId, relationshipType },
+    // ids/enums only. viaPrimaryDoctor records the relationship-derived path
+    // (primary adding a consultant without patient.assignDoctor).
+    metadata: { doctorProfileId, relationshipType, viaPrimaryDoctor },
   });
 
   revalidatePath(`/patients/${patientId}`);
