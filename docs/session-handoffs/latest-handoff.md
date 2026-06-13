@@ -213,6 +213,55 @@ pnpm exec prisma migrate status   # ✅ 3 migrations, DB up to date
 ```
 All four were run on the final Phase 6 state and passed.
 
+## 9a. Branch state + Windows self-host packaging (current)
+
+**Branch promote (done):** `7a0f437` (Phase 10b — Explore free-text PII leak
+closure + privilege-tier escalation guards) was fast-forward promoted
+`dev → staging → production`. `origin/staging` and `origin/production` are both
+at **`7a0f437`** (the verified security fix). `origin/main` untouched at
+`9081ed2`.
+
+**Packaging WIP (committed, dev only):** commit **`97cb5ba`** on `dev` adds the
+platform-independent Windows self-host source — `scripts/package-windows.mjs`
+(`--variant full|lite`), `packaging/windows/**` (setup/start/update/repair
+`.bat`, `lib/ht.mjs` with `HT_DB_MODE` local-vs-remote, `README.txt` quick-start,
+`SETUP_GUIDE.txt` customer guide for both DB modes), `prisma/schema.prisma`
+`binaryTargets ["native","windows"]`, `.env.example` notes, `.gitignore`
+(dist/vendor/*.zip/.env), and `esbuild` as a **devDependency** (build-host
+bundler only). `dev` (`97cb5ba`) intentionally **leads** staging/production by
+this one WIP commit.
+
+> ⚠️ **NOT release-ready.** No zip was built and **no `.bat` or Neon flow has
+> been executed or verified on Windows** — authored + sanity-checked on Linux/WSL
+> only. Before any release, a **Windows x64 host** must: stage portable Node
+> 20.18.1 (`vendor/node`, both variants) + EDB PostgreSQL 16 win-x64
+> (`vendor/postgres`, full only); run `node scripts/package-windows.mjs --variant
+> full` and `--variant lite`; then do the two-mode end-to-end verification
+> (full → bundled-local DB incl. attachment upload/download + `update.bat`
+> data/.env survival; lite → real NeonDB project incl. connection routing —
+> `migrate deploy` on `DIRECT_URL`, app on pooled `DATABASE_URL`). Static
+> connection-routing review already PASSES (`src/lib/db.ts` uses `DATABASE_URL`;
+> shipped schema datasource uses `DIRECT_URL`; `DIRECT_URL` optional at runtime).
+
+**Five adopted UX ease-improvements — to implement + verify on the Windows host
+(NOT done yet):**
+1. **One-run guided Neon setup** — when `setup.bat` (remote mode) finds no usable
+   `DATABASE_URL`, create `.env` from the template, **auto-open it in Notepad and
+   wait** (e.g. `start /wait notepad .env`), then continue once saved —
+   collapsing today's two-run remote flow into one guided run.
+2. **Validate the Neon strings before `migrate deploy`** — check the pooled host
+   contains `-pooler`, the direct host does **not**, and both end with
+   `?sslmode=require`; print a plain-language fix if not.
+3. **Optional Desktop shortcut to `start.bat`** — offer on first setup so daily
+   use is one obvious icon.
+4. **`FIRST-LOGIN.txt`** — write the admin username + one-time temp password +
+   `http://127.0.0.1:8787` to a file with a **"delete after first login"**
+   warning, and **auto-remove it once the forced password change completes**.
+   (Note the on-disk-password tradeoff: the temp password briefly sits in a
+   plaintext file; mitigated by the auto-delete on first successful change.)
+5. **`backup.bat`** — guided "close app, copy `data\` + `.env` to a chosen
+   folder" one-click backup, matching SETUP_GUIDE.txt §6.
+
 ## 9. What NOT to do next
 - ❌ Do not implement AI / vector search / embeddings / case-similarity (Phase 9),
   the D5 PII scrubber / controlled vocabulary, on-write Explore sync hooks, or
