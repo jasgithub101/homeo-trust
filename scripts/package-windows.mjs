@@ -31,11 +31,18 @@
 
 import { spawnSync } from "node:child_process";
 import {
+  chmodSync,
+  copyFileSync,
   cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
+  realpathSync,
+  renameSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -86,6 +93,106 @@ function run(cmd, args, opts = {}) {
   }
 }
 
+// --- SHARED: make the bundle symlink-free (both variants) -------------------
+// WHY: PowerShell Compress-Archive DROPS symlinks, so the unzipped app dies at
+// startup ("Cannot find module '@swc/helpers/_/_interop_require_default'"). Two
+// independent sources of symlinks in the standalone, handled together:
+//   1. node_modules itself. Under pnpm's default isolated linker this is a symlink
+//      FARM (top-level deps + inner peer deps like @swc/helpers all link into
+//      .pnpm/). FIXED UPSTREAM by `nodeLinker: hoisted` in pnpm-workspace.yaml, so
+//      node_modules is REAL directories — see that file's comment.
+//   2. Turbopack's external aliases: .next/standalone/.next/node_modules/<pkg>-<hash>
+//      symlinks (e.g. @node-rs/argon2-<hash>) that the compiled server require()s.
+//      These exist regardless of node-linker. dereferenceTree() below converts them
+//      to real copies — SAFE precisely because (1) is hoisted: each alias target is
+//      a self-contained real package whose own deps (the argon2 native binary,
+//      .prisma/client) resolve by walking up to the hoisted top-level node_modules.
+// assertNoSymlinks() is the regression net: fail LOUDLY before zipping if anything
+// is still a link, rather than ship a zip that explodes on the customer machine.
+
+// Deep-copy `src` -> `dest` materializing REAL files: every component and nested
+// entry is canonicalized via realpathSync, so symlinks (chains, symlinked dirs)
+// become real files/dirs. `seen` holds realpaths on the CURRENT recursion path to
+// break symlink cycles. Returns false for a dangling link (target gone).
+function deepRealCopy(src, dest, seen) {
+  let real;
+  try {
+    real = realpathSync(src);
+  } catch {
+    return false; // dangling symlink -> nothing real to copy
+  }
+  const st = statSync(real);
+  if (st.isDirectory()) {
+    if (seen.has(real)) return true; // cycle on current path -> stop
+    seen.add(real);
+    mkdirSync(dest, { recursive: true });
+    for (const name of readdirSync(real)) {
+      deepRealCopy(join(real, name), join(dest, name), seen);
+    }
+    seen.delete(real);
+  } else {
+    copyFileSync(real, dest);
+    try {
+      chmodSync(dest, st.mode);
+    } catch {
+      /* mode copy is best-effort */
+    }
+  }
+  return true;
+}
+
+// Walk `root`; replace every symlink (any depth) in place with a real copy of its
+// resolved target. Idempotent: an all-real tree is left untouched.
+function dereferenceTree(root) {
+  let replaced = 0;
+  let dangling = 0;
+  const stack = [root];
+  while (stack.length) {
+    const dir = stack.pop();
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, entry.name);
+      if (entry.isSymbolicLink()) {
+        const tmp = `${p}.deref-tmp`;
+        rmSync(tmp, { recursive: true, force: true });
+        const ok = deepRealCopy(p, tmp, new Set());
+        rmSync(p, { recursive: true, force: true });
+        if (ok) {
+          renameSync(tmp, p);
+          replaced++;
+          if (lstatSync(p).isDirectory()) stack.push(p);
+        } else {
+          dangling++;
+        }
+      } else if (entry.isDirectory()) {
+        stack.push(p);
+      }
+    }
+  }
+  return { replaced, dangling };
+}
+
+function assertNoSymlinks(root, label) {
+  const found = [];
+  const stack = [root];
+  while (stack.length) {
+    const dir = stack.pop();
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, entry.name);
+      if (entry.isSymbolicLink()) found.push(p);
+      else if (entry.isDirectory()) stack.push(p);
+    }
+  }
+  if (found.length) {
+    throw new Error(
+      `${label}: found ${found.length} symlink(s) that Compress-Archive would drop ` +
+        `(broken zip). First few:\n  ${found.slice(0, 10).join("\n  ")}\n` +
+        `Ensure pnpm-workspace.yaml has 'nodeLinker: hoisted' and reinstall ` +
+        `(rm -rf node_modules && pnpm install) so the standalone trace is real dirs.`,
+    );
+  }
+  console.log(`${label}: symlink-free (${0} found) ✓`);
+}
+
 console.log(`Building variant: ${VARIANT}${DRY ? " (--dry-run, Linux sanity)" : ""}`);
 
 // 1. Clean dist.
@@ -124,6 +231,15 @@ if (existsSync(join(ROOT, "public"))) {
 } else {
   console.log("no public/ to copy (ok)");
 }
+
+// GOTCHA 3: nodeLinker:hoisted makes node_modules real, but Turbopack still emits
+// a handful of external-alias symlinks under app/.next/node_modules/ (e.g.
+// @node-rs/argon2-<hash>). Dereference them to real copies (safe because hoisting
+// makes each target self-contained), then assert app/ is fully symlink-free. Both
+// run in --dry-run too, so the invariant is validated on Linux.
+const appDeref = dereferenceTree(APP);
+console.log(`dereferenced app/ symlinks: ${appDeref.replaced} replaced, ${appDeref.dangling} dropped`);
+assertNoSymlinks(APP, "app/ (standalone trace)");
 
 // 4. tools/ = self-contained migrator/seeder (prisma CLI + schema + migrations
 //    + compiled seed + opt-in backfills). Installed/generated on the build host.
@@ -322,6 +438,14 @@ for (const f of ["setup.bat", "start.bat", "update.bat", "repair.bat", "README.t
 }
 cpSync(join(WIN, "lib"), join(DIST, "lib"), { recursive: true });
 cpSync(join(ROOT, ".env.example"), join(DIST, ".env.example"));
+
+// 6b. Final regression net: scan the WHOLE dist/ for symlinks before zipping. With
+//     nodeLinker:hoisted the app/ + tools/ installs are real dirs (tools/ .bin are
+//     Windows .cmd shims, not links) and the vendored node/postgres carry none, so
+//     this should find nothing — but if it ever does, we fail HERE instead of
+//     shipping a zip Compress-Archive silently corrupts.
+log("verify dist/ is symlink-free (regression net before zip)");
+assertNoSymlinks(DIST, "dist/ (full package)");
 
 // 7. Zip. (Windows has tar.exe with zip support; or use Compress-Archive.)
 log("zip");

@@ -1,3 +1,8 @@
+# hoisted (real dirs, not pnpm's .pnpm symlink farm): required so the Next
+# standalone trace + tools/ install are symlink-free for the Windows zip, whose
+# Compress-Archive drops symlinks (a dangling @swc/helpers crashed app startup).
+# pnpm 11 reads this from pnpm-workspace.yaml, NOT .npmrc.
+nodeLinker: hoisted
 allowBuilds:
   '@prisma/engines': true
   esbuild: true
