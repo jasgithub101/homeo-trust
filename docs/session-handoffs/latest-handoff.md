@@ -234,7 +234,12 @@ this one WIP commit.
 > ⚠️ **NOT release-ready.** No zip was built and **no `.bat` or Neon flow has
 > been executed or verified on Windows** — authored + sanity-checked on Linux/WSL
 > only. Before any release, a **Windows x64 host** must: stage portable Node
-> 20.18.1 (`vendor/node`, both variants) + EDB PostgreSQL 16 win-x64
+> **22.22.3** (`vendor/node`, both variants — **Node 22 LTS; >= 22.12 REQUIRED**:
+> the Prisma 7.8 CLI `require()`s ESM-only deps (`@prisma/dev` → `zeptomatch`), and
+> `require(ESM)` is on by default only on Node >= 22.12 / >= 20.19; the old Node
+> 20.18.1 pin crashed `setup.bat` > `migrate deploy` with `ERR_REQUIRE_ESM`. The
+> packager validates the staged Node is >= 22.12, accepting newer majors like 24)
+> + EDB PostgreSQL 16 win-x64
 > (`vendor/postgres`, full only); run `node scripts/package-windows.mjs --variant
 > full` and `--variant lite`; then do the two-mode end-to-end verification
 > (full → bundled-local DB incl. attachment upload/download + `update.bat`

@@ -56,10 +56,17 @@ if (!["full", "lite"].includes(VARIANT)) {
 const APP_URL = "http://127.0.0.1:8787"; // fixed port 8787 (baked at build = runtime)
 
 // Pinned bundle versions — keep these in sync with README + the hand-off.
+// Node 22 LTS ("Jod"): the Prisma 7.8 CLI require()s ESM-only deps (@prisma/dev ->
+// zeptomatch); require(ESM) is on by DEFAULT only in Node >= 22.12 (or >= 20.19,
+// but Node 20 is EOL). Bundling Node 20.18.1 crashed `migrate deploy` with
+// ERR_REQUIRE_ESM. Stage Node >= 22.12 into vendor/node (NODE_MIN_* enforces it).
 const PINNED = {
-  node: "20.18.1", // node-v20.18.1-win-x64
+  node: "22.22.3", // node-v22.22.3-win-x64 (Node 22 LTS; require(ESM) default)
   postgresMajor: "16", // EDB PostgreSQL 16.x windows-x64 binaries (pin the major)
 };
+// Minimum bundled Node for require(ESM) by default (Prisma 7.8 CLI needs it).
+const NODE_MIN_MAJOR = 22;
+const NODE_MIN_MINOR = 12;
 
 const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
 const VERSION = pkg.version ?? "0.0.0";
@@ -275,6 +282,37 @@ for (const [label, src, dest, hint] of vendors) {
     throw new Error(`Missing portable ${label} at ${src}. Stage ${hint} there (or set VENDOR_${label.toUpperCase()}_DIR).`);
   }
   cpSync(src, dest, { recursive: true });
+}
+
+// Reject a stale portable Node at BUILD time rather than letting the customer hit
+// ERR_REQUIRE_ESM on `setup.bat` > migrate deploy. We require >= 22.12 but accept
+// any newer major (e.g. 24.x) so the pin can move forward without code changes.
+// (Runs the staged win32 node.exe; on the mandated Windows build host that works.
+// If it can't be executed — e.g. a non-dry run on the wrong OS — we warn, not fail.)
+assertBundledNodeVersion(join(DIST, "node"));
+function assertBundledNodeVersion(nodeDir) {
+  const exe = join(nodeDir, "node.exe");
+  if (!existsSync(exe)) return; // missing handled above
+  const r = spawnSync(exe, ["-v"], { encoding: "utf8" });
+  const v = (r.stdout || "").trim().replace(/^v/, "");
+  const m = /^(\d+)\.(\d+)\./.exec(v);
+  if (!m) {
+    console.warn(
+      `WARN: could not determine bundled Node version (${v || r.error}). ` +
+        `Ensure vendor/node is Node >= ${NODE_MIN_MAJOR}.${NODE_MIN_MINOR} (require(ESM) default).`,
+    );
+    return;
+  }
+  const [maj, min] = [Number(m[1]), Number(m[2])];
+  const ok = maj > NODE_MIN_MAJOR || (maj === NODE_MIN_MAJOR && min >= NODE_MIN_MINOR);
+  if (!ok) {
+    throw new Error(
+      `Bundled Node ${v} is too old for the Prisma 7.8 CLI (needs require(ESM) by ` +
+        `default: Node >= ${NODE_MIN_MAJOR}.${NODE_MIN_MINOR}). Stage Node ${PINNED.node} ` +
+        `(or any >= ${NODE_MIN_MAJOR}.${NODE_MIN_MINOR}) into vendor/node and rebuild.`,
+    );
+  }
+  console.log(`Bundled Node ${v} OK (>= ${NODE_MIN_MAJOR}.${NODE_MIN_MINOR}, require(ESM) default).`);
 }
 
 // 6. Customer-facing files (scripts + README + .env template).
