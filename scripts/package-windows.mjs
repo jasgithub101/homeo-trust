@@ -236,9 +236,25 @@ log("tools: pnpm install + prisma generate (Windows engine)");
 //    FIXED first-party dependency set we curate, installed in isolation — not
 //    arbitrary packages. (The old package.json `pnpm.onlyBuiltDependencies` field
 //    is no longer read by pnpm v11.) shell:true because pnpm is pnpm.cmd on Windows.
+//  --config.node-linker=hoisted : pnpm's DEFAULT layout symlinks every package in
+//    node_modules into a .pnpm/ store (e.g. node_modules/prisma -> .pnpm/...). The
+//    zip step uses PowerShell Compress-Archive, which does NOT preserve symlinks, so
+//    the unzipped tools/node_modules/prisma would be a dangling link and setup.bat
+//    fails with "Prisma CLI missing in tools\". `hoisted` writes real directories so
+//    prisma, @prisma/client, @prisma/adapter-pg, pg, @node-rs/argon2, zod and dotenv
+//    survive zipping (and the seed.cjs externals @prisma/client/@node-rs/argon2 are
+//    real dirs too). Applied for BOTH variants (this is pre-variant-branch).
 run(
   "pnpm",
-  ["install", "--prod", "--ignore-workspace", "--config.dangerouslyAllowAllBuilds=true", "--dir", TOOLS],
+  [
+    "install",
+    "--prod",
+    "--ignore-workspace",
+    "--config.dangerouslyAllowAllBuilds=true",
+    "--config.node-linker=hoisted",
+    "--dir",
+    TOOLS,
+  ],
   { cwd: TOOLS, shell: true },
 );
 run("node", [join(TOOLS, "node_modules", "prisma", "build", "index.js"), "generate", "--schema", join(TOOLS, "prisma", "schema.prisma")], { cwd: TOOLS });
