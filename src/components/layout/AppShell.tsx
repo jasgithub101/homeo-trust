@@ -21,6 +21,9 @@ export function AppShell({
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header user={user} />
         <main className="flex-1 overflow-y-auto p-6">{children}</main>
+        <footer className="flex-shrink-0 border-t border-slate-200 bg-white px-6 py-2 text-xs text-slate-400">
+          Built by Jaswanth Pasumarthy
+        </footer>
       </div>
     </div>
   );

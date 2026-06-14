@@ -1,5 +1,6 @@
 ========================================================================
  Homeo Trust — Windows  (Quick Start)
+ Developed by Jaswanth Pasumarthy — jassu827@gmail.com
 ========================================================================
 
 Runs on your own Windows 10/11 PC (64-bit). No admin rights, nothing to

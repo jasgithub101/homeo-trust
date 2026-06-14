@@ -1,5 +1,7 @@
 # Homeo Trust — Project Walkthrough
 
+**Author:** Jaswanth Pasumarthy — jassu827@gmail.com
+
 > **Audience:** the project's author, preparing to explain the whole system
 > end-to-end in technical interviews. This is the single narrative "home" — it
 > ties the parts together and emphasizes **why** and **tradeoffs**, not just

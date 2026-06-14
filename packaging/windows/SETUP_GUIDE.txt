@@ -1,5 +1,6 @@
 ========================================================================
  Homeo Trust — Setup Guide (Windows)
+ Developed by Jaswanth Pasumarthy — jassu827@gmail.com
 ========================================================================
 
 A friendly, step-by-step guide. You do not need to be technical. If a
