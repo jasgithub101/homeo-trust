@@ -1,7 +1,18 @@
-import { requireUser } from "@/lib/auth";
+import { requireUser, userHasPermission } from "@/lib/auth";
+import { listMyUpcomingAppointments } from "@/lib/permissions/patient-access";
+import { UpcomingAppointments } from "@/components/appointments/UpcomingAppointments";
 
 export default async function DashboardPage() {
   const user = await requireUser();
+
+  // A2 widget: only for users with a DoctorProfile (incl. a non-doctor admin →
+  // no widget) who also hold appointment.view (admin bypasses the permission).
+  const showAppointments =
+    !!user.doctorProfileId &&
+    (user.isAdmin || userHasPermission(user, "appointment.view"));
+  const upcoming = showAppointments
+    ? await listMyUpcomingAppointments(user)
+    : [];
 
   return (
     <div className="space-y-6">
@@ -27,9 +38,7 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      <p className="text-xs text-slate-400">
-        Clinical features (patients, cases, treatments) arrive in later phases.
-      </p>
+      {showAppointments ? <UpcomingAppointments appointments={upcoming} /> : null}
     </div>
   );
 }

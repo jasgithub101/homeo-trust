@@ -1,5 +1,5 @@
 import "server-only";
-import type { Prisma } from "@prisma/client";
+import type { AppointmentType, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import {
   type CurrentUser,
@@ -235,6 +235,88 @@ export const canCreateAppointment = (u: CurrentUser, p: string) =>
   permittedAndRelated(u, p, "appointment.create");
 export const canManageAppointment = (u: CurrentUser, p: string) =>
   permittedAndRelated(u, p, "appointment.manage");
+
+export interface MyUpcomingAppointment {
+  id: string;
+  scheduledAt: Date;
+  type: AppointmentType;
+  patientId: string;
+  patientCode: string;
+  /** Null unless the viewer may see this patient's PII (depth). */
+  patientName: string | null;
+}
+
+/**
+ * A2 doctor-dashboard data: the actor's OWN upcoming appointments — patients
+ * they CURRENTLY treat (PRIMARY_TREATING) or consult on (CONSULTING).
+ *
+ * Deliberately NOT `patientListWhere`: a `viewAll` doctor must still see only
+ * THEIR patients here, and an ENDED relationship (`isCurrentlyTreating: false`)
+ * must not surface — even though the general `isRelatedToPatient` matches past
+ * relationships. Returns [] when the actor has no DoctorProfile (incl. a
+ * non-doctor admin). The caller still gates rendering on `appointment.view`.
+ *
+ * Patient name is depth-gated: because every patient here is in the actor's
+ * CURRENT scope, `canViewSensitivePatient` reduces to admin OR
+ * `patient.viewSensitive`; that flag drives a Prisma column-gate so a
+ * de-identified viewer never receives the name column.
+ */
+export async function listMyUpcomingAppointments(
+  user: CurrentUser,
+  opts: { windowDays?: number; take?: number } = {},
+): Promise<MyUpcomingAppointment[]> {
+  if (!user.doctorProfileId) return [];
+
+  const current = await db.doctorPatientRelationship.findMany({
+    where: {
+      doctorProfileId: user.doctorProfileId,
+      isCurrentlyTreating: true,
+      relationshipType: { in: ["PRIMARY_TREATING", "CONSULTING"] },
+    },
+    select: { patientId: true },
+    distinct: ["patientId"],
+  });
+  const patientIds = current.map((r) => r.patientId);
+  if (patientIds.length === 0) return [];
+
+  const windowDays = opts.windowDays ?? 14;
+  const take = opts.take ?? 20;
+  const now = new Date();
+  const horizon = new Date(now.getTime() + windowDays * 24 * 60 * 60 * 1000);
+
+  const showSensitive =
+    user.isAdmin || userHasPermission(user, "patient.viewSensitive");
+
+  const rows = await db.appointment.findMany({
+    where: {
+      patientId: { in: patientIds },
+      status: "SCHEDULED",
+      deletedAt: null,
+      scheduledAt: { gte: now, lte: horizon },
+    },
+    orderBy: { scheduledAt: "asc" },
+    take,
+    select: {
+      id: true,
+      scheduledAt: true,
+      type: true,
+      patient: {
+        select: { id: true, patientCode: true, name: showSensitive },
+      },
+    },
+  });
+
+  return rows.map((r) => ({
+    id: r.id,
+    scheduledAt: r.scheduledAt,
+    type: r.type,
+    patientId: r.patient.id,
+    patientCode: r.patient.patientCode,
+    patientName: showSensitive
+      ? ((r.patient as { name?: string }).name ?? null)
+      : null,
+  }));
+}
 
 /**
  * Prisma `where` filter scoping the patient list (BREADTH):
