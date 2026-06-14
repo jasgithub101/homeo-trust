@@ -71,6 +71,14 @@ export default async function TreatmentDetailPage({
   });
   if (!t || t.patientId !== patientId || t.deletedAt) notFound();
 
+  // A1.5: the follow-up date now lives on a linked active FOLLOW_UP appointment.
+  // Fall back to the deprecated column for any row not yet backfilled.
+  const followUpAppt = await db.appointment.findFirst({
+    where: { treatmentEntryId: t.id, type: "FOLLOW_UP", deletedAt: null },
+    select: { scheduledAt: true },
+  });
+  const followUpDate = followUpAppt?.scheduledAt ?? t.nextFollowUpDate;
+
   const [
     canEdit,
     canArchive,
@@ -132,7 +140,7 @@ export default async function TreatmentDetailPage({
           <Row label="Improvement score" value={t.improvementScore != null ? `${t.improvementScore}/10` : null} />
           <Row
             label="Next follow-up"
-            value={t.nextFollowUpDate ? new Date(t.nextFollowUpDate).toLocaleDateString() : null}
+            value={followUpDate ? new Date(followUpDate).toLocaleDateString() : null}
           />
         </dl>
       </section>

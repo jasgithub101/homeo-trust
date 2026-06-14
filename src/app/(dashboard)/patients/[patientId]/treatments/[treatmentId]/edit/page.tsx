@@ -49,6 +49,14 @@ export default async function EditTreatmentPage({
     redirect(`/patients/${patientId}/treatments/${treatmentId}`);
   }
 
+  // A1.5: prefill "Next follow-up" from the linked active FOLLOW_UP appointment;
+  // fall back to the deprecated column for any row not yet backfilled.
+  const followUpAppt = await db.appointment.findFirst({
+    where: { treatmentEntryId: treatmentId, type: "FOLLOW_UP", deletedAt: null },
+    select: { scheduledAt: true },
+  });
+  const followUpDate = followUpAppt?.scheduledAt ?? t.nextFollowUpDate;
+
   const [doctors, issues] = await Promise.all([
     loadDoctorOptions(),
     loadIssueOptions(patientId),
@@ -68,7 +76,7 @@ export default async function EditTreatmentPage({
     symptomChanges: t.symptomChanges ?? "",
     patientCondition: t.patientCondition ?? "",
     improvementScore: t.improvementScore ?? "",
-    nextFollowUpDate: toDateInput(t.nextFollowUpDate),
+    nextFollowUpDate: toDateInput(followUpDate),
     treatingDoctorProfileIds: t.participants
       .filter((p) => p.participantType === "TREATING_DOCTOR")
       .map((p) => p.doctorProfileId),

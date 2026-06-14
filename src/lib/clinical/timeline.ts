@@ -37,8 +37,15 @@ export async function buildTimeline(
   const { showSensitive, showArchived } = opts;
   const archiveFilter = showArchived ? {} : { deletedAt: null };
 
-  const [patient, relationships, caseRecord, issues, symptoms, treatments] =
-    await Promise.all([
+  const [
+    patient,
+    relationships,
+    caseRecord,
+    issues,
+    symptoms,
+    treatments,
+    followUpAppointments,
+  ] = await Promise.all([
       db.patient.findUnique({
         where: { id: patientId },
         select: { createdAt: true },
@@ -80,7 +87,6 @@ export async function buildTimeline(
           treatmentDate: true,
           entryType: true,
           medicineName: true,
-          nextFollowUpDate: true,
           deletedAt: true,
           participants: {
             select: {
@@ -91,6 +97,13 @@ export async function buildTimeline(
             },
           },
         },
+      }),
+      // Follow-ups now come from FOLLOW_UP appointments (A1.5), not the
+      // deprecated TreatmentEntry.nextFollowUpDate. Cleared (soft-deleted)
+      // follow-ups never appear (deletedAt: null), independent of showArchived.
+      db.appointment.findMany({
+        where: { patientId, type: "FOLLOW_UP", deletedAt: null },
+        select: { id: true, scheduledAt: true },
       }),
     ]);
 
@@ -166,15 +179,15 @@ export async function buildTimeline(
       href: `/patients/${patientId}/treatments/${t.id}`,
       archived: !!t.deletedAt,
     });
-    if (t.nextFollowUpDate) {
-      events.push({
-        date: t.nextFollowUpDate,
-        kind: "followup",
-        title: "Follow-up scheduled",
-        href: `/patients/${patientId}/treatments/${t.id}`,
-        archived: !!t.deletedAt,
-      });
-    }
+  }
+
+  for (const a of followUpAppointments) {
+    events.push({
+      date: a.scheduledAt,
+      kind: "followup",
+      title: "Follow-up scheduled",
+      href: `/patients/${patientId}/appointments/${a.id}`,
+    });
   }
 
   // Newest first.

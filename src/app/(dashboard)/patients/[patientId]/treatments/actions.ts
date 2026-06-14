@@ -18,6 +18,26 @@ import {
 } from "@/lib/validation/clinical";
 import { toTreatmentScalars } from "@/lib/clinical/data";
 import type { ClinicalActionState } from "@/lib/clinical/form-state";
+import {
+  syncFollowUpAppointment,
+  type FollowUpSyncAudit,
+} from "@/lib/appointments/sync";
+
+/** Flush the follow-up appointment audit AFTER the tx commits — ids/enums only. */
+async function auditFollowUp(
+  userId: string,
+  patientId: string,
+  a: FollowUpSyncAudit | null,
+) {
+  if (!a) return;
+  await writeAuditLog({
+    action: a.action,
+    actorUserId: userId,
+    entityType: "Appointment",
+    entityId: a.appointmentId,
+    metadata: { patientId, type: "FOLLOW_UP", status: a.status, viaTreatment: true },
+  });
+}
 
 /** Form payload → schema input (multi-value doctor lists use getAll). */
 function readTreatmentForm(formData: FormData) {
@@ -144,7 +164,7 @@ export async function createTreatmentAction(
 
   const scalars = toTreatmentScalars(parsed.data);
 
-  const entryId = await db.$transaction(async (tx) => {
+  const { entryId, followUpAudit } = await db.$transaction(async (tx) => {
     const entry = await tx.treatmentEntry.create({
       data: {
         patientId,
@@ -157,7 +177,15 @@ export async function createTreatmentAction(
     await tx.treatmentDoctorParticipant.createMany({
       data: participantRows(entry.id, links.treating, links.consulting),
     });
-    return entry.id;
+    // Route the form's "Next follow-up" date to a linked FOLLOW_UP appointment
+    // (A1.5). In the same tx → a sync failure rolls back the treatment write.
+    const followUpAudit = await syncFollowUpAppointment(tx, {
+      treatmentEntryId: entry.id,
+      patientId,
+      nextFollowUpDate: parsed.data.nextFollowUpDate,
+      userId: user.id,
+    });
+    return { entryId: entry.id, followUpAudit };
   });
 
   await writeAuditLog({
@@ -172,8 +200,10 @@ export async function createTreatmentAction(
       consultingCount: links.consulting.length,
     },
   });
+  await auditFollowUp(user.id, patientId, followUpAudit);
 
   revalidatePath(`/patients/${patientId}/treatments`);
+  revalidatePath(`/patients/${patientId}/appointments`);
   revalidatePath(`/patients/${patientId}/timeline`);
   redirect(`/patients/${patientId}/treatments/${entryId}`);
 }
@@ -215,7 +245,7 @@ export async function updateTreatmentAction(
   const scalars = toTreatmentScalars(parsed.data);
 
   // Replace the participant set transactionally (clean re-insert).
-  await db.$transaction(async (tx) => {
+  const followUpAudit = await db.$transaction(async (tx) => {
     await tx.treatmentEntry.update({
       where: { id: treatmentId },
       data: { patientIssueId: links.issueId, ...scalars },
@@ -226,6 +256,13 @@ export async function updateTreatmentAction(
     await tx.treatmentDoctorParticipant.createMany({
       data: participantRows(treatmentId, links.treating, links.consulting),
     });
+    // Sync the linked FOLLOW_UP appointment from the form date (A1.5).
+    return syncFollowUpAppointment(tx, {
+      treatmentEntryId: treatmentId,
+      patientId,
+      nextFollowUpDate: parsed.data.nextFollowUpDate,
+      userId: user.id,
+    });
   });
 
   await writeAuditLog({
@@ -235,9 +272,11 @@ export async function updateTreatmentAction(
     entityId: treatmentId,
     metadata: { patientId, entryType: parsed.data.entryType },
   });
+  await auditFollowUp(user.id, patientId, followUpAudit);
 
   revalidatePath(`/patients/${patientId}/treatments`);
   revalidatePath(`/patients/${patientId}/treatments/${treatmentId}`);
+  revalidatePath(`/patients/${patientId}/appointments`);
   revalidatePath(`/patients/${patientId}/timeline`);
   return { success: "Treatment entry saved." };
 }

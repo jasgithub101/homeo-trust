@@ -89,6 +89,9 @@ export function toTreatmentScalars(
     symptomChanges: txt(input.symptomChanges),
     patientCondition: (input.patientCondition || null) as PatientCondition | null,
     improvementScore: int(input.improvementScore),
-    nextFollowUpDate: date(input.nextFollowUpDate),
+    // nextFollowUpDate is DEPRECATED (Feature A1.5): no longer written. The form
+    // still posts it; the treatment action routes it to a linked FOLLOW_UP
+    // Appointment via syncFollowUpAppointment. The column is kept (read-only,
+    // fallback for un-backfilled rows) and dropped in a later cleanup.
   };
 }
